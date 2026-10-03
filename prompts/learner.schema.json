@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "reelengine/prompts/learner.schema.json",
+  "title": "Reel Engine weekly learning review",
+  "description": "What the weekly brain review returns. learner.apply_review() re-validates every change against the locked rules, hard limits and min n per arm; anything else is recorded as rejected.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "findings", "changes", "next_experiments"],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 800,
+      "description": "2-4 plain sentences: what the data says this week and what changes."
+    },
+    "findings": {
+      "type": "array",
+      "maxItems": 12,
+      "description": "Claims about arms or logged factors. Only arms with n >= min_n_per_arm count.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["dimension", "arm", "claim", "n", "effect_size", "metric", "confidence"],
+        "properties": {
+          "dimension": {"enum": ["slot", "hook_type", "duration_band", "cta_type", "hashtag_count", "caption_style"]},
+          "arm": {"type": "string", "minLength": 1, "maxLength": 40},
+          "claim": {"type": "string", "minLength": 1, "maxLength": 300},
+          "n": {"type": "integer", "minimum": 0},
+          "effect_size": {"type": ["number", "null"], "description": "effect_vs_rest (mean composite difference) or another stated effect"},
+          "metric": {"type": "string", "maxLength": 60},
+          "confidence": {"enum": ["low", "medium", "high"]}
+        }
+      }
+    },
+    "changes": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field", "after", "evidence", "confidence", "rationale"],
+        "properties": {
+          "field": {
+            "type": "string",
+            "pattern": "^(rules\\.(new|R[0-9]+\\.(text|evidence))|hypotheses\\.H[0-9]+\\.status|experiments\\.E[0-9]+\\.(status|result)|arms\\.(slot|hook_type|duration_band)\\.[A-Za-z0-9_:\\-]+\\.(preferred|retired)|defaults\\.(target_band|cta_type|hashtag_count|caption_style)|topics|caption_style\\.(first_line_max_chars|keywords|tone|emoji_max)|trial_reels\\.enabled)$",
+            "description": "Dotted path of the one playbook field to change."
+          },
+          "after": {
+            "type": ["string", "number", "integer", "boolean", "object", "array", "null"],
+            "description": "New value. rules.new takes {\"text\": \"...\"}; topics takes the whole list."
+          },
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["n", "effect_size", "metric", "dimension", "arm"],
+            "properties": {
+              "n": {"type": "integer", "minimum": 0},
+              "effect_size": {"type": ["number", "null"]},
+              "metric": {"type": "string", "maxLength": 60},
+              "dimension": {"enum": ["slot", "hook_type", "duration_band", "cta_type", "hashtag_count", "caption_style", null]},
+              "arm": {"type": ["string", "null"], "maxLength": 40}
+            }
+          },
+          "confidence": {"enum": ["low", "medium", "high"]},
+          "rationale": {"type": "string", "minLength": 1, "maxLength": 500}
+        }
+      }
+    },
+    "next_experiments": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["hypothesis", "dimension", "metric", "why"],
+        "properties": {
+          "hypothesis": {"type": "string", "minLength": 5, "maxLength": 300},
+          "dimension": {"enum": ["slot", "hook_type", "duration_band", "cta_type", "hashtag_count", "caption_style", "format", null]},
+          "metric": {"type": "string", "maxLength": 60},
+          "why": {"type": "string", "maxLength": 300}
+        }
+      }
+    }
+  }
+}

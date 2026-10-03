@@ -1,0 +1,174 @@
+# Reel Engine configuration: EXAMPLE. Copy to config.toml (git-ignored) and edit it; the engine falls back to
+# this file only when config.toml is missing. NO SECRETS HERE: tokens live in Windows Credential Manager
+# (keyring service "ReelEngine"). Relative paths resolve against the project root.
+# Validated on every start by reelengine/config.py (reel doctor shows problems).
+
+[engine]
+mode = "dry-run"              # "dry-run" (default) | "live". Live needs a LIVE-OK line in docs/DECISIONS.md
+timezone = "Asia/Riyadh"
+tick_budget_minutes = 12      # stop starting new heavy work after this inside one 15-min tick
+max_retries = 4               # failed stage retries (exponential backoff) before a reel is held
+retry_base_minutes = 15
+
+[paths]
+inbox = "data/inbox"          # e.g. "C:/Users/<you>/OneDrive/Reel Inbox" (a synced phone-upload folder)
+data_dir = "data"
+ffmpeg = "bin/ffmpeg/bin/ffmpeg.exe"
+ffprobe = "bin/ffmpeg/bin/ffprobe.exe"
+fonts_dir = "brand/fonts"
+brand_dir = "brand.example"   # the fictional example pack; point it at your own brand folder
+prompts_dir = "prompts"
+
+[intake]
+extensions = [".mp4", ".mov", ".m4v"]
+stable_ticks = 2              # size must be unchanged for this many ticks before intake
+min_duration_s = 3.0          # below this the clip is held (spec 4.2)
+
+[whisper]
+model_path = "models/faster-whisper-large-v3"
+device = "cuda"
+compute_type = "float16"
+cpu_compute_type = "int8"     # fallback when CUDA fails
+language = "ar"
+beam_size = 5
+vad_filter = true
+initial_prompt = "مقطع باللهجة السعودية عن أدوات الذكاء الاصطناعي والوظائف التقنية للطلاب والخريجين. يعني، إمم، آآ. ChatGPT, Claude, GitHub, LinkedIn, CV, Python."
+
+[brain]
+provider = "claude-cli"       # interface: an "anthropic-api" provider can be added later
+cli_path = ""                 # empty = auto (claude on PATH, else newest VS Code extension binary)
+model = "sonnet"
+review_model = "sonnet"
+timeout_s = 300
+trends_timeout_s = 900         # the weekly trends run does live web research
+retries = 2                   # schema-validation retries (so up to 3 attempts)
+max_calls_per_day = 60        # protects the subscription from a runaway loop (~3 calls per reel)
+
+[edit]
+phrase_gap_s = 0.35           # split transcript into numbered segments at pauses longer than this
+gap_threshold_s = 0.45        # silences longer than this are cut ...
+gap_target_s = 0.12           # ... down to this
+pad_s = 0.08                  # speech padding at the outer edges of every kept segment
+cover_mode = "hook_card"      # thumb_offset: "hook_card" (frame with the hook text) or "brain" (the brain's cover word)
+zoom_levels = [1.00, 1.06]    # punch-in alternates per cut
+hook_card_s = 2.2
+progress_bar = false
+min_output_s = 5.0
+max_output_s = 90.0
+
+[captions]
+font = "IBM Plex Sans Arabic"
+font_size = 128               # ~75-80 px glyph height on 1920 (1.4x of v1); up to 2 lines per chunk
+max_words = 4
+max_chars = 22
+text_color = "#FFFFFF"
+highlight_color = "#B570FF"
+outline_color = "#000000"
+outline = 6
+shadow = 2
+margin_bottom = 560           # px from the bottom edge (bottom ~20% is Instagram UI)
+margin_left = 100
+margin_right = 190            # right-side action buttons
+hook_font_size = 120              # hook card; wraps to 2 lines if long (max 7 words)
+hook_margin_top = 330
+
+[render]
+width = 1080
+height = 1920
+fps = 30
+crf = 19
+preset = "medium"
+maxrate = "12M"
+bufsize = "24M"
+gop = 60
+audio_bitrate = "128k"
+audio_rate = 48000
+loudness_i = -14.0
+true_peak = -1.5
+lra = 11.0
+
+[qa]
+min_score = 7
+duration_min_s = 5.0
+duration_max_s = 90.0
+loudness_tolerance_lu = 1.0
+max_file_mb = 300
+max_video_mbps = 25
+caption_max_chars = 2200
+hashtags_max = 5              # Instagram cap since 2025-12-18; code also enforces a hard cap of 5
+black_max_s = 1.0
+freeze_max_s = 2.5
+
+[schedule]
+max_posts_per_day = 1
+min_gap_hours = 6
+quiet_start = "00:30"         # no publishing between quiet_start and quiet_end (Asia/Riyadh)
+quiet_end = "11:00"
+min_lead_minutes = 20         # never schedule closer than this to "now"
+
+[instagram]
+api_version = "v26.0"
+graph_host = "https://graph.instagram.com"
+container_host = "https://graph.instagram.com"   # VERIFY on first live connect (Meta sample uses graph.facebook.com)
+upload_host = "https://rupload.facebook.com"
+auth_mode = "header"          # VERIFY: "header" (Authorization: Bearer) or "query" (access_token param)
+ig_user_id = ""               # not secret; filled by `reel connect`
+share_to_feed = true
+send_is_ai_generated = true   # VERIFY: is_ai_generated param (added 2026-06-22); false = real footage
+poll_interval_s = 60
+poll_timeout_s = 300
+container_expiry_hours = 24
+quota_safety_margin = 2       # refuse to publish if quota_usage >= total - margin
+app_usage_backoff_pct = 75
+refresh_min_age_days = 7      # refresh the 60-day token weekly (it must be >= 24 h old)
+request_timeout_s = 60
+insights_checkpoints_h = [1, 6, 24, 72, 168, 672]
+media_metric_groups = [
+  ["views", "reach"],
+  ["likes", "comments", "shares", "saved"],
+  ["reposts", "total_interactions"],
+  ["ig_reels_avg_watch_time", "ig_reels_video_view_total_time"],
+  ["reels_skip_rate"],
+  ["crossposted_views", "facebook_views"],
+]
+account_metrics = ["reach", "accounts_engaged", "profile_links_taps", "views", "likes", "comments", "shares", "saves", "replies", "reposts", "total_interactions", "follows_and_unfollows"]
+skip_rate_is_percent = true   # VERIFY: reels_skip_rate unit (percent vs fraction)
+
+[cta]
+service_enabled = false       # stays off until the offer page is live AND the legal checklist is done
+allowed = ["follow", "save", "send", "comment", "none"]   # organic CTAs from captions.yaml in your brand pack; "service" is DRAFT-only
+
+[learning]
+baseline_posts = 5
+rolling_window = 20
+reward_checkpoint_h = 72
+explore_min = 0.25
+explore_until_posts = 30
+min_n_per_arm = 3
+trial_reels_min_followers = 1000
+
+[learning.weights]            # composite score (retention signals weigh most, then sends, saves, likes, reach per follower)
+skip_rate = 0.25              # lower is better (inverted)
+watch_ratio = 0.25            # ig_reels_avg_watch_time / duration
+shares_per_reach = 0.20       # sends matter most for non-follower reach
+saves_per_reach = 0.12
+likes_per_reach = 0.10
+views_per_follower = 0.08
+
+[vault]
+path = ""                     # your Obsidian vault (only used when enabled = true)
+subdir = "12 Social Media"
+enabled = false               # false = write to data/vault_preview/ (needs Yazeed's OK to write the real vault)
+
+[notify]
+toast = true
+telegram = false              # v2, needs a bot + chat_id allow-list
+
+[backup]
+keep = 7
+onedrive_copy_dir = "data/backup-copy"   # e.g. a OneDrive folder; the DB holds no secrets
+min_free_gb = 20
+
+[dashboard]
+host = "127.0.0.1"
+port = 8765

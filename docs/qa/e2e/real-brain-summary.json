@@ -1,0 +1,35 @@
+{
+ "reel": 1,
+ "source_s": 39.028,
+ "output_s": 17.066,
+ "cuts": 3,
+ "scores": {
+  "accuracy": 9,
+  "clarity": 8,
+  "hook": 7,
+  "value": 7
+ },
+ "scheduled_at": "2026-10-02T10:30:00+00:00",
+ "slot": "weekend-13:30",
+ "media_id": "dryrun-1",
+ "brain_calls": [
+  {
+   "task": "edit_plan",
+   "attempts": 1,
+   "ok": 1,
+   "duration_s": 23.8
+  },
+  {
+   "task": "caption",
+   "attempts": 1,
+   "ok": 1,
+   "duration_s": 11.31
+  },
+  {
+   "task": "critique",
+   "attempts": 1,
+   "ok": 1,
+   "duration_s": 33.03
+  }
+ ]
+}

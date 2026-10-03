@@ -1,0 +1,83 @@
+# EXAMPLE hook bank (fictional creator). hook_type must be one of the bandit's arms (see playbook_v1.json).
+type_to_arm:
+  question: question
+  bold claim: bold_claim
+  myth-bust: bold_claim
+  number / list: list_number
+  mistake: problem
+  story: story
+  pov: pov_before_after
+  before / after: pov_before_after
+hooks:
+- id: H01
+  brand_type: Question
+  hook_type: question
+  spoken: قدمت على وظايف كثير وما أحد رد؟ جرب هالطريقة
+  on_screen: قدمت كثير وما أحد رد؟
+  on_screen_words: 4
+  topic: job_hunt
+  facts_from: example
+  recheck_weekly: false
+  blocked: false
+  blocked_reason: null
+  needs_confirmation: false
+- id: H02
+  brand_type: Bold claim
+  hook_type: bold_claim
+  spoken: الشهادة لحالها ما تكفي، المشروع الصغير يفرق أكثر
+  on_screen: مشروع صغير > شهادة
+  on_screen_words: 4
+  topic: build_proof
+  facts_from: example
+  recheck_weekly: false
+  blocked: false
+  blocked_reason: null
+  needs_confirmation: false
+- id: H03
+  brand_type: Number / list
+  hook_type: list_number
+  spoken: ثلاث أوامر تخلي الـAI يرتب لك جدول Excel
+  on_screen: 3 أوامر Excel
+  on_screen_words: 3
+  topic: ai_tools
+  facts_from: example
+  recheck_weekly: false
+  blocked: false
+  blocked_reason: null
+  needs_confirmation: false
+- id: H04
+  brand_type: Mistake
+  hook_type: problem
+  spoken: عنوانك في LinkedIn مكتوب فيه «طالب»؟ هذا يضيع عليك فرص
+  on_screen: غيّر عنوانك في LinkedIn
+  on_screen_words: 4
+  topic: job_hunt
+  facts_from: example
+  recheck_weekly: false
+  blocked: false
+  blocked_reason: null
+  needs_confirmation: false
+- id: H05
+  brand_type: Story
+  hook_type: story
+  spoken: في هاكاثون المثال كان عندنا يومين بس نبني المشروع
+  on_screen: يومين نبني مشروع
+  on_screen_words: 3
+  topic: build_proof
+  facts_from: example
+  recheck_weekly: false
+  blocked: false
+  blocked_reason: null
+  needs_confirmation: false
+- id: H06
+  brand_type: Before / after
+  hook_type: pov_before_after
+  spoken: هذي نقطة من سيرة خريج، وهذي نفس النقطة بعد دقيقة تعديل
+  on_screen: نقطة وحدة… قبل وبعد
+  on_screen_words: 4
+  topic: cv_method
+  facts_from: example
+  recheck_weekly: false
+  blocked: false
+  blocked_reason: null
+  needs_confirmation: false

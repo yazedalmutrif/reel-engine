@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block main %}
+<div class="page-head">
+  <h1>Reels</h1>
+  <p class="lede">Every reel with its latest numbers. Watch = share of the reel's length watched on average; composite = the learner's score against the account median.</p>
+</div>
+
+<section class="card card-flush" aria-labelledby="rt-h">
+  <h2 id="rt-h" class="sr-only">All reels</h2>
+  {% if reels %}
+  <table class="tbl rtable">
+    <caption class="sr-only">All reels, not-yet-published first, then newest published. Metrics are from the latest insight checkpoint.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Reel</th>
+        <th scope="col">Pillar</th>
+        <th scope="col">Hook</th>
+        <th scope="col" class="num">Length</th>
+        <th scope="col">Published</th>
+        <th scope="col" class="num">Views</th>
+        <th scope="col" class="num">Reach</th>
+        <th scope="col" class="num">Watch</th>
+        <th scope="col" class="num">Skip</th>
+        <th scope="col" class="num">Shares / reach</th>
+        <th scope="col" class="num">Composite</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in reels %}
+      <tr>
+        <th scope="row" class="rt-reel">
+          <a href="reels/{{ r.id }}.html" class="rt-link">
+            {{ m.thumb(r, root, "thumb thumb-sm") }}
+            <span class="rt-text">
+              <span class="rt-title"{{ r.title|langattrs }}>{{ r.title }}</span>
+              <span class="rt-id mono">#{{ r.id }}</span>
+            </span>
+          </a>
+        </th>
+        <td data-label="Pillar">{{ r.pillar_label }}</td>
+        <td data-label="Hook">{{ r.hook_label }}</td>
+        <td data-label="Length" class="num">{{ (r.duration|round|int ~ ' s') if r.duration else '–' }}</td>
+        <td data-label="Published" class="rt-pub">{% if r.state == 'published' %}<span class="mono">{{ clock.date(r.published) }}</span>{% else %}{{ m.state(r.state) }}{% endif %}</td>
+        <td data-label="Views" class="num{% if r.m.views is none %} nil{% endif %}">{{ r.m.views|int if r.m.views is not none else '–' }}</td>
+        <td data-label="Reach" class="num{% if r.m.reach is none %} nil{% endif %}">{{ r.m.reach|int if r.m.reach is not none else '–' }}</td>
+        <td data-label="Watch" class="num{% if r.m.watch_ratio is none %} nil{% endif %}">{{ r.m.watch_ratio|pct if r.m.watch_ratio is not none else '–' }}</td>
+        <td data-label="Skip" class="num{% if r.m.skip_pct is none %} nil{% endif %}">{{ ('%.0f%%'|format(r.m.skip_pct)) if r.m.skip_pct is not none else '–' }}</td>
+        <td data-label="Shares / reach" class="num{% if r.m.shares_per_reach is none %} nil{% endif %}">{{ r.m.shares_per_reach|pct(1) if r.m.shares_per_reach is not none else '–' }}</td>
+        <td data-label="Composite" class="num{% if r.composite is none %} nil{% endif %}">{{ '%.2f'|format(r.composite) if r.composite is not none else '–' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  {{ m.empty("No reels yet", "Each clip you drop in the inbox becomes a row here, with its views, watch time and score once it is posted.", "▦") }}
+  {% endif %}
+</section>
+{% endblock %}

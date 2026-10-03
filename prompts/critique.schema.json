@@ -1,0 +1,49 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["scores", "dialect_ok", "spelling_issues", "claims_about_yazeed", "violations", "summary", "fixes"],
+  "properties": {
+    "scores": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hook", "clarity", "value", "accuracy"],
+      "properties": {
+        "hook": {"type": "integer", "minimum": 1, "maximum": 10},
+        "clarity": {"type": "integer", "minimum": 1, "maximum": 10},
+        "value": {"type": "integer", "minimum": 1, "maximum": 10},
+        "accuracy": {"type": "integer", "minimum": 1, "maximum": 10}
+      }
+    },
+    "dialect_ok": {"type": "boolean", "description": "true if the on-screen text and caption read as natural Saudi dialect with clean spelling"},
+    "spelling_issues": {"type": "array", "items": {"type": "string", "maxLength": 120}, "maxItems": 10},
+    "claims_about_yazeed": {
+      "type": "array",
+      "maxItems": 15,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["claim", "in_facts", "fact_id"],
+        "properties": {
+          "claim": {"type": "string", "maxLength": 200},
+          "in_facts": {"type": "boolean"},
+          "fact_id": {"type": ["string", "null"], "maxLength": 40}
+        }
+      }
+    },
+    "violations": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["rule", "detail"],
+        "properties": {
+          "rule": {"type": "string", "enum": ["facts", "engagement_bait", "guarantee", "salary", "third_party_promotion", "service_cta", "privacy", "reposted_content", "misleading", "offensive", "other"]},
+          "detail": {"type": "string", "maxLength": 300}
+        }
+      }
+    },
+    "summary": {"type": "string", "maxLength": 400},
+    "fixes": {"type": "array", "items": {"type": "string", "maxLength": 200}, "maxItems": 6}
+  }
+}

@@ -1,0 +1,42 @@
+# EXAMPLE episode ideas (fictional creator), one per line, grouped by topic.
+episodes:
+- id: E-1
+  topic: ai_tools
+  pillar_title: AI tools in practice → Reach
+  text: ثلاث عادات تخلي الـAI يفهمك من أول مرة (be specific, give an example, ask it to check its work)
+  draws_on: example
+  draft: false
+  blocked: false
+  blocked_reason: null
+  recheck_weekly: false
+  needs_confirmation: false
+- id: E-2
+  topic: job_hunt
+  pillar_title: From graduation to the first job → Reach + trust
+  text: كيف تجهز لمقابلة بالإنجليزي مع AI (الأسئلة المتوقعة، إجاباتك، وأسئلتك أنت للشركة)
+  draws_on: example
+  draft: false
+  blocked: false
+  blocked_reason: null
+  recheck_weekly: false
+  needs_confirmation: false
+- id: E-3
+  topic: build_proof
+  pillar_title: Build in public → Trust
+  text: كيف بنينا QueueWise في الهاكاثون وحصلنا المركز الثاني (only the verified facts)
+  draws_on: example
+  draft: false
+  blocked: false
+  blocked_reason: null
+  recheck_weekly: false
+  needs_confirmation: false
+- id: E-4
+  topic: cv_method
+  pillar_title: CV method → Conversion
+  text: نقطة وحدة في السيرة قبل وبعد: ابدأ بفعل، وحط نتيجة حقيقية
+  draws_on: example
+  draft: false
+  blocked: false
+  blocked_reason: null
+  recheck_weekly: false
+  needs_confirmation: false

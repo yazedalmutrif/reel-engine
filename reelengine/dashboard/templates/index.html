@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block main %}
+<div class="page-head">
+  <h1>Overview</h1>
+  <p class="lede">How the account is growing and what the engine is doing right now.</p>
+</div>
+
+<section class="kpis" aria-labelledby="kpi-h">
+  <h2 id="kpi-h" class="sr-only">Key numbers</h2>
+
+  <div class="kpi">
+    <p class="kpi-label">Followers</p>
+    {% if ov.followers is not none %}
+    <p class="kpi-value">{{ ov.followers|int }}</p>
+    <p class="kpi-sub">{% if ov.fol_delta is not none %}<span class="delta {{ 'up' if ov.fol_delta >= 0 else 'down' }}">{{ '+' if ov.fol_delta >= 0 else '−' }}{{ ov.fol_delta|abs|int }}</span> in 7 days{% else %}first reading{% endif %}</p>
+    {{ ov.fol_spark }}
+    {% else %}
+    <p class="kpi-value kpi-value-sm">Under 100</p>
+    <p class="kpi-sub">Instagram reports followers from 100 up</p>
+    {% endif %}
+  </div>
+
+  <div class="kpi">
+    <p class="kpi-label">Views · 7 days</p>
+    {% if ov.views_7 is not none %}
+    <p class="kpi-value">{{ ov.views_7|compact }}</p>
+    <p class="kpi-sub">{% if ov.views_prev %}{% set ch = (ov.views_7 - ov.views_prev) / ov.views_prev %}<span class="delta {{ 'up' if ch >= 0 else 'down' }}">{{ '▲' if ch >= 0 else '▼' }} {{ (ch|abs * 100)|round|int }}%</span> vs previous 7 days{% elif ov.views_source == 'reels' %}reels published this week{% else %}account views, daily sum{% endif %}</p>
+    {{ ov.views_spark }}
+    {% else %}
+    <p class="kpi-value kpi-value-sm">–</p>
+    <p class="kpi-sub">Appears after the first daily account check</p>
+    {% endif %}
+  </div>
+
+  <div class="kpi">
+    <p class="kpi-label">Avg watch</p>
+    {% if ov.watch is not none %}
+    <p class="kpi-value">{{ ov.watch|pct }}</p>
+    <p class="kpi-sub">of each reel's length · last {{ ov.watch_n }} reel{{ 's' if ov.watch_n != 1 }}</p>
+    {% else %}
+    <p class="kpi-value kpi-value-sm">–</p>
+    <p class="kpi-sub">Needs a published reel with insights</p>
+    {% endif %}
+  </div>
+
+  <div class="kpi">
+    <p class="kpi-label">Shares / reach</p>
+    {% if ov.spr is not none %}
+    <p class="kpi-value">{{ ov.spr|pct(1) }}</p>
+    <p class="kpi-sub">shares per account reached · last {{ ov.spr_n }}</p>
+    {% else %}
+    <p class="kpi-value kpi-value-sm">–</p>
+    <p class="kpi-sub">Needs a published reel with insights</p>
+    {% endif %}
+  </div>
+
+  <div class="kpi kpi-wide">
+    <p class="kpi-label">Next post</p>
+    {% if ov.next_post %}
+    {% set np = ov.next_post %}
+    <p class="kpi-value kpi-value-sm"><time datetime="{{ clock.iso(np.scheduled) }}">{{ clock.dow(np.scheduled) }} {{ clock.local(np.scheduled).strftime('%H:%M') }}</time></p>
+    <p class="kpi-sub">{{ clock.date(np.scheduled) }} · {{ clock.rel(np.scheduled) }}</p>
+    <p class="kpi-reel"><a href="reels/{{ np.id }}.html"><span class="mono">#{{ np.id }}</span> <span{{ np.title|langattrs }}>{{ np.title }}</span></a></p>
+    {% else %}
+    <p class="kpi-value kpi-value-sm">Nothing scheduled</p>
+    <p class="kpi-sub">A reel gets a slot once it passes QA</p>
+    {% endif %}
+  </div>
+
+  <div class="kpi">
+    <p class="kpi-label">Queue</p>
+    <p class="kpi-value">{{ ov.queue }}</p>
+    <p class="kpi-sub">{% if ov.queue %}{{ ov.q_ready }} ready · {{ ov.q_working }} in progress{% else %}Drop clips in the OneDrive inbox{% endif %}</p>
+    <p class="kpi-link"><a href="pipeline.html">Open pipeline →</a></p>
+  </div>
+
+  <div class="kpi">
+    <p class="kpi-label">Mode</p>
+    <p class="kpi-badge"><span class="badge badge-lg badge-{{ mode.badge.sev }}"><span class="badge-icon" aria-hidden="true">{{ mode.badge.icon }}</span>{{ mode.badge.text }}</span></p>
+    <p class="kpi-sub">{% if mode.mode == 'live' %}Posts go to Instagram{% else %}Dry-run: nothing is posted{% endif %}{% if mode.paused %} · paused{% endif %}{% if mode.auth %} · reconnect needed{% endif %}</p>
+  </div>
+
+  <div class="kpi kpi-muted kpi-wide">
+    <p class="kpi-label">Revenue</p>
+    <p class="kpi-value kpi-value-sm">✍️ not live</p>
+    <p class="kpi-sub">The service offer is off, so there is no revenue to count yet</p>
+    <p class="kpi-link"><a href="money.html">Money tab →</a></p>
+  </div>
+</section>
+
+<div class="grid grid-2">
+  <section class="card" aria-labelledby="fol-h">
+    <div class="card-head">
+      <h2 id="fol-h">Followers</h2>
+      <p class="card-sub">Daily account check, last 60 days</p>
+    </div>
+    {% if ov.followers_chart %}
+    {{ ov.followers_chart }}
+    <details class="tview">
+      <summary>Show as table</summary>
+      <div class="table-scroll">
+      <table class="tbl tbl-compact">
+        <caption class="sr-only">Followers per day</caption>
+        <thead><tr><th scope="col">Day</th><th scope="col" class="num">Followers</th></tr></thead>
+        <tbody>{% for a in ov.fol_table|reverse %}<tr><th scope="row" class="mono">{{ a.day }}</th><td class="num">{{ a.followers|int if a.followers is not none else 'under 100' }}</td></tr>{% endfor %}</tbody>
+      </table>
+      </div>
+    </details>
+    {% else %}
+    {{ m.empty("No follower history yet", "The daily 03:30 check records followers here. Instagram only reports the count once the account has 100 followers.", "◔") }}
+    {% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="vpr-h">
+    <div class="card-head">
+      <h2 id="vpr-h">Views per recent reel</h2>
+      <p class="card-sub">Latest checkpoint · last 12 reels, oldest first</p>
+    </div>
+    {% if ov.views_chart %}
+    {{ ov.views_chart }}
+    <details class="tview">
+      <summary>Show as table</summary>
+      <div class="table-scroll">
+      <table class="tbl tbl-compact">
+        <caption class="sr-only">Views per recent reel</caption>
+        <thead><tr><th scope="col">Reel</th><th scope="col">Published</th><th scope="col" class="num">Views</th><th scope="col" class="num">Checkpoint</th></tr></thead>
+        <tbody>{% for r in ov.views_table|reverse %}<tr><th scope="row"><a href="reels/{{ r.id }}.html" class="mono">#{{ r.id }}</a></th><td class="mono">{{ clock.date(r.published) }}</td><td class="num">{{ r.m.views|int }}</td><td class="num">{{ '%g'|format(r.latest_cp) if r.latest_cp is not none else '–' }} h</td></tr>{% endfor %}</tbody>
+      </table>
+      </div>
+    </details>
+    {% else %}
+    {{ m.empty("No published reels yet", "Once a reel is posted, its views appear here after the first 1-hour insights check.", "▮") }}
+    {% endif %}
+  </section>
+</div>
+
+<div class="grid grid-21">
+  <section class="card" aria-labelledby="al-h">
+    <div class="card-head">
+      <h2 id="al-h">Alerts</h2>
+      <p class="card-sub">Held reels, account access and recent errors</p>
+    </div>
+    {% if ov.alerts %}
+    <ul class="alerts">
+      {% for a in ov.alerts %}
+      <li class="alert alert-{{ a.sev }}">
+        {{ m.sev_icon(a.sev) }}
+        <div class="alert-body">
+          <p class="alert-title"><span class="sr-only">{{ m.sev_word(a.sev) }}: </span>{% if a.href %}<a href="{{ a.href }}">{{ a.title }}</a>{% else %}{{ a.title }}{% endif %}{% if a.ar_title %} <span class="alert-ar"{{ a.ar_title|langattrs }}>{{ a.ar_title }}</span>{% endif %}</p>
+          <p class="alert-text" dir="auto">{{ a.body }}</p>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="allclear">{{ m.sev_icon('good') }}<div><p class="alert-title">All clear</p><p class="alert-text">Nothing is held, the account is connected and there were no errors in the last 24 hours.</p></div></div>
+    {% endif %}
+  </section>
+
+  <div class="stack">
+    <section class="card" aria-labelledby="tr-h">
+      <div class="card-head">
+        <h2 id="tr-h">Trial Reels</h2>
+        {% if ov.trial_ok %}<span class="chip chip-good"><span class="dot" aria-hidden="true"></span>Eligible</span>{% else %}<span class="chip chip-muted"><span class="dot" aria-hidden="true"></span>Not yet</span>{% endif %}
+      </div>
+      <p class="big-line"><span class="mono">{{ (ov.followers or 0)|int }}</span> <span class="muted">/ {{ ov.trial_min|int }} followers</span></p>
+      {{ ov.trial_meter }}
+      <p class="note">{% if ov.trial_ok %}The account can test reels with non-followers first. The playbook decides when to use them.{% else %}Trial Reels unlock at {{ ov.trial_min|int }} followers (playbook rule R10). Until then every reel posts normally.{% endif %}</p>
+    </section>
+
+    <section class="card" aria-labelledby="act-h">
+      <div class="card-head"><h2 id="act-h">Recent activity</h2></div>
+      {% if ov.notes %}
+      <ul class="activity">
+        {% for n in ov.notes %}
+        <li><span class="act-dot lvl-{{ n.level }}" aria-hidden="true"></span><div><p class="act-title" dir="auto">{{ n.title }}{% if n.reel_id %} <a href="reels/{{ n.reel_id }}.html" class="mono">#{{ n.reel_id }}</a>{% endif %}</p><p class="act-time mono">{{ clock.dt(n.t) }} · {{ clock.rel(n.t) }}</p></div></li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      {{ m.empty("Quiet so far", "Notifications (a reel posted, a reel held, a new brief) will be listed here.", "◌") }}
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}

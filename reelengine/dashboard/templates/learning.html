@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block main %}
+<div class="page-head">
+  <h1>Learning</h1>
+  <p class="lede">What the engine has learned from your numbers, how sure it is, and what it tests next. It only changes the playbook (hooks, lengths, slots, topics, caption style), never the facts or legal gates.</p>
+</div>
+
+<section class="summary-strip" aria-label="Learning summary">
+  <div><p class="kpi-label">Playbook</p><p class="strip-value">{% if latest_pb %}v{{ latest_pb.version }}{% else %}v1{% endif %}</p><p class="kpi-sub">{% if latest_pb %}since {{ clock.date(latest_pb.created) }}{% else %}starting playbook{% endif %}</p></div>
+  <div><p class="kpi-label">Last review</p><p class="strip-value">{% if latest_pb and latest_pb.version > 1 %}{{ latest_pb.applied }} applied{% else %}–{% endif %}</p><p class="kpi-sub">{% if latest_pb and latest_pb.version > 1 %}{{ latest_pb.rejected }} rejected for weak evidence{% else %}weekly, Saturday 20:00{% endif %}</p></div>
+  <div><p class="kpi-label">Reels scored</p><p class="strip-value">{{ scored_n }}</p><p class="kpi-sub">claims need n ≥ {{ min_n }} per arm</p></div>
+  <div><p class="kpi-label">Exploring</p><p class="strip-value">{{ explore.share|pct if explore.share is not none else '–' }}</p><p class="kpi-sub">of the last {{ explore.n }} picks · floor {{ explore.min|pct }}</p></div>
+</section>
+
+<div class="grid grid-12">
+  <section class="card" aria-labelledby="tl-h">
+    <div class="card-head"><h2 id="tl-h">Playbook versions</h2></div>
+    {% if pbs %}
+    <ol class="timeline">
+      {% for p in pbs %}
+      <li class="tl-item{% if loop.first %} tl-current{% endif %}">
+        <span class="tl-dot" aria-hidden="true"></span>
+        <p class="tl-head"><span class="tl-ver mono">v{{ p.version }}</span> <span class="mono muted">{{ clock.date(p.created) }}</span>{% if loop.first %} <span class="chip chip-accent">current</span>{% endif %}</p>
+        <p class="tl-sum" dir="auto">{{ p.summary or 'No summary recorded.' }}</p>
+        {% if p.version > 1 %}<p class="tl-count mono">{{ p.applied }} applied · {{ p.rejected }} rejected</p>{% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    {{ m.empty("Only the starting playbook", "v1 comes from the research note. The first weekly review writes v2 once there are numbers to learn from.", "◎") }}
+    {% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="diff-h">
+    <div class="card-head">
+      <h2 id="diff-h">{% if latest_pb and latest_pb.version > 1 %}What changed in v{{ latest_pb.version }}{% else %}Latest changes{% endif %}</h2>
+      <p class="card-sub">Each change needs evidence: n reels, the effect size, and a confidence</p>
+    </div>
+    {% if latest_changes %}
+    <ul class="diff">
+      {% for c in latest_changes %}
+      <li class="diff-item diff-{{ c._status }}">
+        <div class="diff-top">
+          {% if c._status == 'applied' %}<span class="chip chip-good"><span class="dot" aria-hidden="true"></span>Applied</span>{% elif c._status == 'rejected' %}<span class="chip chip-bad"><span class="dot" aria-hidden="true"></span>Rejected</span>{% else %}<span class="chip">{{ c._status|human }}</span>{% endif %}
+          <code class="diff-field">{{ c.field }}</code>
+        </div>
+        <p class="diff-change"><span class="diff-before" dir="auto">{{ c._before }}</span> <span class="arrow" aria-label="changed to">→</span> <span class="diff-after" dir="auto">{{ c._after }}</span></p>
+        <dl class="evidence">
+          <div><dt>n</dt><dd>{{ c._n if c._n is not none else '–' }}</dd></div>
+          <div><dt>effect</dt><dd>{% if c._effect is not none %}{{ '%+.2f'|format(c._effect) }}{% else %}–{% endif %}</dd></div>
+          <div><dt>metric</dt><dd>{{ c._metric or '–' }}</dd></div>
+          <div><dt>confidence</dt><dd>{{ c._conf }}</dd></div>
+        </dl>
+        {% if c.reason %}<p class="diff-reason" dir="auto">{{ c.reason }}</p>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    {{ m.empty("No changes yet", "After each Saturday review, applied and rejected changes are listed here with their evidence (n, effect size, confidence).", "±") }}
+    {% endif %}
+  </section>
+</div>
+
+<section class="section" aria-labelledby="arms-h">
+  <div class="section-head">
+    <h2 id="arms-h">What wins: bandit arms</h2>
+    <p class="section-sub">Chance each option beats the account median. The engine picks the next slot, hook and length by sampling these, so better arms get picked more but every arm still gets tried.</p>
+  </div>
+  <p class="legend"><span class="key"><span class="key-bar" aria-hidden="true"></span>90% credible interval</span><span class="key"><span class="key-dot k-accent" aria-hidden="true"></span>posterior mean</span><span class="key"><span class="key-rule" aria-hidden="true"></span>50% = no signal yet</span></p>
+  {% if priors_only %}<p class="note">No scored reels yet, so these are the starting priors: every arm is equally uncertain.</p>{% endif %}
+  {% if bandits %}
+  <div class="grid grid-3">
+    {% for b in bandits %}
+    <section class="card" aria-labelledby="arm-{{ b.dim }}-h">
+      <div class="card-head card-head-stack">
+        <h3 id="arm-{{ b.dim }}-h">{{ b.label }}</h3>
+        <p class="card-sub">{{ b.hint }}</p>
+      </div>
+      {% if b.lead %}<p class="lead-line">Leading: <strong>{{ b.lead.label }}</strong> <span class="muted mono">{{ b.lead.mean|pct }} · n {{ b.lead.n }}</span></p>{% else %}<p class="lead-line muted">No leader yet: an arm needs n ≥ {{ min_n }}</p>{% endif %}
+      {{ b.svg }}
+      <details class="tview">
+        <summary>Show as table</summary>
+        <div class="table-scroll">
+        <table class="tbl tbl-compact">
+          <caption class="sr-only">{{ b.label }} arms</caption>
+          <thead><tr><th scope="col">Arm</th><th scope="col" class="num">n</th><th scope="col" class="num">Wins</th><th scope="col" class="num">Mean</th><th scope="col" class="num">90% interval</th><th scope="col" class="num">P(best)</th></tr></thead>
+          <tbody>{% for a in b.rows %}<tr><th scope="row">{{ a.label }}</th><td class="num">{{ a.n }}</td><td class="num">{{ a.wins }}</td><td class="num">{{ a.mean|pct }}</td><td class="num">{{ a.lo|pct }}–{{ a.hi|pct }}</td><td class="num">{{ a.p_best|pct }}</td></tr>{% endfor %}</tbody>
+        </table>
+        </div>
+      </details>
+    </section>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card">{{ m.empty("No arms yet", "Slots, hook types and length bands appear here once the playbook is loaded.", "◇") }}</div>
+  {% endif %}
+</section>
+
+<section class="section" aria-labelledby="exp-h">
+  <div class="section-head">
+    <h2 id="exp-h">Experiments</h2>
+    <p class="section-sub">What is being tested, what is only logged, and what has been answered.</p>
+  </div>
+  {% if exp_count %}
+  <div class="board">
+    {% for colm in board %}
+    <div class="board-col">
+      <div class="lane-head"><h3>{{ colm.label }}</h3><span class="count mono">{{ colm.cards|length }}</span></div>
+      <p class="lane-hint">{{ colm.hint }}</p>
+      {% if colm.cards %}
+      <ul class="lane-list">
+        {% for e in colm.cards %}
+        <li class="exp">
+          <p class="exp-top"><span class="mono exp-id">{{ e.id }}</span>{% if e.dimension %}<span class="chip chip-sm">{{ e.dimension|dimlabel }}</span>{% endif %}{% if e.dropped %}<span class="chip chip-sm chip-muted">dropped</span>{% endif %}</p>
+          <p class="exp-h" dir="auto">{{ e.hypothesis }}</p>
+          {% if e.metric %}<p class="exp-meta">Measured by <span class="mono">{{ e.metric }}</span></p>{% endif %}
+          {% if e.started %}<p class="exp-meta mono">{{ clock.date(e.started) }}{% if e.ended %} → {{ clock.date(e.ended) }}{% endif %}</p>{% endif %}
+          {% if e.result %}<p class="exp-result" dir="auto">{{ e.result }}</p>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="lane-empty">None</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card">{{ m.empty("No experiments yet", "The playbook's hypotheses (hook style, length, slot, caption style, hashtags, CTA) show here as a board.", "⚗") }}</div>
+  {% endif %}
+</section>
+
+<section class="section" aria-labelledby="lf-h">
+  <div class="section-head">
+    <h2 id="lf-h">Logged factors</h2>
+    <p class="section-sub">Not tested by the bandit, only recorded on every reel. Each dot is a reel's composite score; the violet tick is the average (gray when n &lt; {{ min_n }}, too few to trust).</p>
+  </div>
+  {% if scored_n %}
+  <p class="legend"><span class="key"><span class="key-dot k-base" aria-hidden="true"></span>one reel</span><span class="key"><span class="key-tick" aria-hidden="true"></span>level mean</span><span class="key"><span class="key-rule" aria-hidden="true"></span>all-reel median</span></p>
+  <div class="grid grid-3">
+    {% for f in factors %}
+    <section class="card" aria-labelledby="lf-{{ f.key }}-h">
+      <div class="card-head"><h3 id="lf-{{ f.key }}-h">{{ f.label }}</h3></div>
+      {% if f.rows %}
+      {{ f.svg }}
+      <details class="tview">
+        <summary>Show as table</summary>
+        <table class="tbl tbl-compact">
+          <caption class="sr-only">{{ f.label }} vs composite</caption>
+          <thead><tr><th scope="col">Level</th><th scope="col" class="num">n</th><th scope="col" class="num">Mean composite</th></tr></thead>
+          <tbody>{% for r in f.rows %}<tr><th scope="row">{{ r.label }}</th><td class="num">{{ r.n }}</td><td class="num">{{ '%.2f'|format(r.mean) }}{% if not r.enough %} <span class="muted">(n &lt; {{ min_n }})</span>{% endif %}</td></tr>{% endfor %}</tbody>
+        </table>
+      </details>
+      {% else %}
+      <p class="note">Not recorded on any scored reel yet.</p>
+      {% endif %}
+    </section>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card">{{ m.empty("Nothing scored yet", "A reel is scored at its +72 h checkpoint. CTA type, hashtag count and caption style are then compared here.", "⋯") }}</div>
+  {% endif %}
+</section>
+{% endblock %}

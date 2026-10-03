@@ -1,0 +1,57 @@
+{# Shared building blocks. No inline styles: everything is a class in assets/app.css. #}
+
+{% macro empty(title, body, icon="○") %}
+<div class="empty">
+  <span class="empty-icon" aria-hidden="true">{{ icon }}</span>
+  <p class="empty-title">{{ title }}</p>
+  <p class="empty-body">{{ body }}</p>
+</div>
+{% endmacro %}
+
+{% macro thumb(r, root, cls="thumb") %}
+{% if r.thumb %}
+<img class="{{ cls }}" src="/thumbs/{{ r.thumb }}" alt="" width="54" height="96" loading="lazy" decoding="async">
+{% else %}
+<span class="{{ cls }} thumb-none" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" focusable="false"><path d="M8 5v14l11-7z" fill="#62626F"/></svg></span>
+{% endif %}
+{% endmacro %}
+
+{% macro state(s) %}
+<span class="chip chip-state st-{{ s }}"><span class="dot" aria-hidden="true"></span>{{ state_labels.get(s, s) }}</span>
+{% endmacro %}
+
+{% macro sev_icon(sev) %}
+<span class="sev-icon sev-{{ sev }}" aria-hidden="true">{% if sev == 'good' %}✓{% elif sev == 'warning' %}!{% elif sev == 'serious' %}▲{% elif sev == 'critical' %}✕{% else %}i{% endif %}</span>
+{% endmacro %}
+
+{% macro sev_word(sev) %}{% if sev == 'good' %}OK{% elif sev == 'warning' %}Warning{% elif sev == 'serious' %}Attention{% elif sev == 'critical' %}Problem{% else %}Info{% endif %}{% endmacro %}
+
+{% macro reason(kind, text, sev) %}
+<p class="reason reason-{{ sev }}">{{ sev_icon(sev) }}<span class="reason-text"><span class="reason-kind">{{ kind }}</span> <span dir="auto">{{ text }}</span></span></p>
+{% endmacro %}
+
+{% macro rcard(r, root, clock, show_reason=True) %}
+<article class="rcard">
+  <a class="rcard-link" href="{{ root }}reels/{{ r.id }}.html">
+    {{ thumb(r, root) }}
+    <span class="rcard-body">
+      <span class="rcard-id">#{{ r.id }}{% if r.pillar %} · {{ r.pillar_label }}{% endif %}</span>
+      <span class="rcard-title"{{ r.title|langattrs }}>{{ r.title }}</span>
+      <span class="rcard-meta">
+        {% if r.state == 'published' %}{{ clock.dt(r.published) }}{% if r.m.views is not none %} · {{ r.m.views|compact }} views{% endif %}
+        {% elif r.state == 'scheduled' %}Posts {{ clock.dt(r.scheduled) }} <span class="muted">({{ clock.rel(r.scheduled) }})</span>
+        {% else %}{% if r.duration %}{{ r.duration|round|int }} s · {% endif %}updated {{ clock.rel(r.updated) }}{% endif %}
+      </span>
+    </span>
+  </a>
+  {% if show_reason and r.state == 'held' %}
+  {{ reason("Held:", r.held_reason or "Held by QA (no reason recorded).", "serious") }}
+  {% elif show_reason and r.state == 'failed' %}
+  {{ reason("Failed" ~ (" in " ~ r.failed_from if r.failed_from else "") ~ ":", r.last_error or "No error text recorded.", "critical") }}
+  <p class="rcard-foot">{{ r.retries }} retr{{ 'y' if r.retries == 1 else 'ies' }}{% if r.next_attempt %} · next try {{ clock.rel(r.next_attempt) }}{% endif %}</p>
+  {% endif %}
+</article>
+{% endmacro %}
+
+{% macro legend_line(label, cls) %}<span class="key"><span class="key-line {{ cls }}" aria-hidden="true"></span>{{ label }}</span>{% endmacro %}
+{% macro legend_dot(label, cls) %}<span class="key"><span class="key-dot {{ cls }}" aria-hidden="true"></span>{{ label }}</span>{% endmacro %}

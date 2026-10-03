@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block main %}
+<nav class="crumbs" aria-label="Breadcrumb"><a href="{{ root }}reels.html">Reels</a> <span aria-hidden="true">›</span> <span aria-current="page" class="mono">#{{ r.id }}</span></nav>
+
+<div class="reel-head">
+  <h1 class="reel-title"{{ r.title|langattrs }}>{{ r.title }}</h1>
+  <div class="chips">
+    {{ m.state(r.state) }}
+    {% if r.pillar %}<span class="chip">{{ r.pillar_label }}</span>{% endif %}
+    {% if r.hook_type %}<span class="chip">Hook: {{ r.hook_label }}</span>{% endif %}
+    {% if r.band %}<span class="chip mono">{{ r.band }} s band</span>{% endif %}
+    {% if r.slot %}<span class="chip">{{ r.slot|slot }}</span>{% endif %}
+    {% if r.playbook_version %}<span class="chip mono">playbook v{{ r.playbook_version }}</span>{% endif %}
+    {% if r.dry_run %}<span class="chip chip-muted">dry-run</span>{% endif %}
+  </div>
+</div>
+
+<div class="reel-grid">
+  <div class="reel-media">
+    {% if d.video_ok %}
+    <video class="player" controls preload="none" playsinline width="1080" height="1920"{% if r.thumb %} poster="/thumbs/{{ r.thumb }}"{% endif %} src="/media/{{ r.media }}">
+      Your browser cannot play this video. The file is data/out/{{ r.media }}.
+    </video>
+    {% else %}
+    <figure class="player player-missing">
+      {% if r.thumb %}<img src="/thumbs/{{ r.thumb }}" alt="Cover frame of reel {{ r.id }}" width="360" height="640">{% else %}<span class="player-blank" aria-hidden="true"></span>{% endif %}
+      <figcaption>{% if r.state in ('new', 'transcribed', 'planned') %}Not rendered yet: the video appears after the render stage.{% else %}Video file not on this computer{% if demo %} (demo reels have no video){% endif %}.{% endif %}</figcaption>
+    </figure>
+    {% endif %}
+    {% if r.permalink %}<p class="media-link"><a href="{{ r.permalink }}" rel="noopener noreferrer">Open on Instagram ↗</a></p>{% endif %}
+  </div>
+
+  <div class="reel-info">
+    {% if r.state == 'held' %}
+    {{ m.reason("Held:", r.held_reason or "Held by QA (no reason recorded).", "serious") }}
+    {% elif r.state == 'failed' %}
+    {{ m.reason("Failed" ~ (" in " ~ r.failed_from if r.failed_from else "") ~ ":", r.last_error or "No error text recorded.", "critical") }}
+    {% endif %}
+
+    <dl class="facts">
+      <div><dt>Published</dt><dd class="mono">{{ clock.dt(r.published) if r.published else '–' }}</dd></div>
+      <div><dt>Scheduled</dt><dd class="mono">{{ clock.dt(r.scheduled) if r.scheduled else '–' }}</dd></div>
+      <div><dt>Length</dt><dd class="mono">{{ ('%.1f s'|format(r.duration)) if r.duration else '–' }}</dd></div>
+      <div><dt>Source clip</dt><dd class="mono">{{ ('%.1f s'|format(r.src_duration)) if r.src_duration else '–' }}</dd></div>
+    </dl>
+
+    {% if r.latest_cp is not none %}
+    <div class="mini-kpis">
+      <div class="mini"><p class="kpi-label">Views</p><p class="mini-value">{{ r.m.views|int if r.m.views is not none else '–' }}</p></div>
+      <div class="mini"><p class="kpi-label">Reach</p><p class="mini-value">{{ r.m.reach|int if r.m.reach is not none else '–' }}</p></div>
+      <div class="mini"><p class="kpi-label">Watch</p><p class="mini-value">{{ r.m.watch_ratio|pct if r.m.watch_ratio is not none else '–' }}</p></div>
+      <div class="mini"><p class="kpi-label">Skip rate</p><p class="mini-value">{{ ('%.0f%%'|format(r.m.skip_pct)) if r.m.skip_pct is not none else '–' }}</p></div>
+      <div class="mini"><p class="kpi-label">Shares / reach</p><p class="mini-value">{{ r.m.shares_per_reach|pct(1) if r.m.shares_per_reach is not none else '–' }}</p></div>
+      <div class="mini"><p class="kpi-label">Composite</p><p class="mini-value">{{ '%.2f'|format(r.composite) if r.composite is not none else '–' }}</p></div>
+    </div>
+    <p class="note">Numbers from the +{{ '%g'|format(r.latest_cp) }} h checkpoint. Likes {{ r.m.likes|int }} · comments {{ r.m.comments|int }} · saves {{ r.m.saved|int }} · avg watch {{ ('%.1f s'|format(r.m.watch_s)) if r.m.watch_s is not none else '–' }}.</p>
+    {% endif %}
+
+    <section class="card card-inset" aria-labelledby="cap-h">
+      <div class="card-head"><h2 id="cap-h">Caption</h2>{% if r.caption.cta_type %}<span class="chip">CTA: {{ r.caption.cta_type }}</span>{% endif %}</div>
+      {% if r.caption.caption %}
+      <p class="caption" lang="ar" dir="rtl">{{ r.caption.caption }}</p>
+      {% if r.hashtags %}
+      <ul class="tags" aria-label="Hashtags">{% for h in r.hashtags %}<li dir="auto">{{ h if h.startswith('#') else '#' ~ h }}</li>{% endfor %}</ul>
+      {% endif %}
+      {% if r.caption.keywords %}<p class="note">Search keywords: <span dir="auto">{{ r.caption.keywords|join(' · ') }}</span></p>{% endif %}
+      {% else %}
+      {{ m.empty("No caption yet", "The caption and hashtags are written after the edit plan, just before QA.", "✎") }}
+      {% endif %}
+    </section>
+  </div>
+</div>
+
+<section class="section" aria-labelledby="cur-h">
+  <div class="section-head">
+    <h2 id="cur-h">Performance over time</h2>
+    <p class="section-sub">Each insight checkpoint (+1 h to +28 d) against the account median of the previous 20 reels at the same point.</p>
+  </div>
+  {% if d.charts %}
+  <p class="legend">{{ m.legend_line("This reel", "k-accent") }}{% if d.has_base %}{{ m.legend_line("Account median", "k-base") }}{% else %}<span class="muted">No baseline yet: it needs 3 earlier reels with the same checkpoint.</span>{% endif %}</p>
+  <div class="grid grid-3 smalls">
+    {% for c in d.charts %}
+    <figure class="small">
+      <figcaption>{{ c.label }}</figcaption>
+      {{ c.svg }}
+    </figure>
+    {% endfor %}
+  </div>
+  <details class="tview">
+    <summary>Show as table</summary>
+    <div class="table-scroll">
+    <table class="tbl tbl-compact">
+      <caption class="sr-only">Metric values per checkpoint, this reel vs account median</caption>
+      <thead><tr><th scope="col">Metric</th>{% for row in d.charts[0].rows %}<th scope="col" class="num">{{ row[0] }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for c in d.charts %}
+        <tr><th scope="row">{{ c.label }}</th>{% for row in c.rows %}<td class="num">{{ row[1] }}<span class="muted"> / {{ row[2] }}</span></td>{% endfor %}</tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <p class="note">Each cell: this reel / account median.</p>
+  </details>
+  {% else %}
+  <div class="card">{{ m.empty("No insights yet", "Once the reel is published, Instagram numbers are collected at +1 h, +6 h, +24 h, +3 d, +7 d and +28 d and drawn here.", "◷") }}</div>
+  {% endif %}
+</section>
+
+<div class="grid grid-2">
+  <section class="card" aria-labelledby="qa-h">
+    <div class="card-head">
+      <h2 id="qa-h">QA checks</h2>
+      {% if r.qa %}{% if r.qa.passed %}<span class="chip chip-good"><span class="dot" aria-hidden="true"></span>Passed</span>{% else %}<span class="chip chip-bad"><span class="dot" aria-hidden="true"></span>Did not pass</span>{% endif %}{% endif %}
+    </div>
+    {% if d.scores %}
+    <h3 class="sub-h">Critique scores <span class="muted">(pass mark {{ d.min_score }}/10)</span></h3>
+    <ul class="scores">
+      {% for s in d.scores %}
+      <li><span class="score-name">{{ s.name }}</span>{{ s.meter }}<span class="score-val mono">{{ '%g'|format(s.v) }}/10</span><span class="sr-only">{{ 'pass' if s.ok else 'below pass mark' }}</span></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if d.checks %}
+    <h3 class="sub-h">Gates</h3>
+    <ul class="checks">
+      {% for c in d.checks %}
+      <li class="check {{ 'ok' if c.ok else ('hard' if c.hard else 'soft') }}">
+        {{ m.sev_icon('good' if c.ok else ('critical' if c.hard else 'warning')) }}
+        <span class="check-name">{{ c.name|human }}{% if not c.ok and c.hard %} <span class="tag-hard">hard fail</span>{% endif %}</span>
+        {% if c.detail %}<span class="check-detail" dir="auto">{{ c.detail }}</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if not d.scores and not d.checks %}
+    {{ m.empty("Not checked yet", "QA runs after the render: technical specs, the facts and legal gates, caption limits and a separate critique score.", "✓") }}
+    {% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="ep-h">
+    <div class="card-head"><h2 id="ep-h">Edit plan</h2></div>
+    {% if r.plan %}
+    <dl class="facts facts-2">
+      <div><dt>Cuts</dt><dd class="mono">{{ r.plan.cuts if r.plan.cuts is not none else '–' }}</dd></div>
+      <div><dt>Output / source</dt><dd class="mono">{{ ('%.1f'|format(r.plan.output_duration or r.duration or 0)) }} s / {{ ('%.1f'|format(r.src_duration)) if r.src_duration else '–' }} s</dd></div>
+      <div><dt>Trimmed</dt><dd class="mono">{% if r.src_duration and (r.plan.output_duration or r.duration) %}{{ ((1 - (r.plan.output_duration or r.duration) / r.src_duration) * 100)|round|int }}%{% else %}–{% endif %}</dd></div>
+      <div><dt>Segments kept</dt><dd class="mono">{{ r.plan.keep_segments|length if r.plan.keep_segments else '–' }}</dd></div>
+    </dl>
+    {% if r.hook %}
+    <h3 class="sub-h">Hook</h3>
+    <p class="hook-line" lang="ar" dir="rtl">{{ r.hook.spoken }}</p>
+    {% if r.hook.on_screen %}<p class="onscreen"><span class="kpi-label">On screen</span> <span lang="ar" dir="rtl">{{ r.hook.on_screen }}</span></p>{% endif %}
+    {% endif %}
+    <h3 class="sub-h">Risk flags</h3>
+    {% if r.plan.risk_flags %}
+    <ul class="flags">{% for f in r.plan.risk_flags %}<li dir="auto">{{ f }}</li>{% endfor %}</ul>
+    {% else %}<p class="note">None raised.</p>{% endif %}
+    {% if r.plan.notes %}<p class="note" dir="auto">{{ r.plan.notes }}</p>{% endif %}
+    {% else %}
+    {{ m.empty("No edit plan yet", "After transcription the brain picks the takes to keep, the hook and the title card. The summary shows here.", "✂") }}
+    {% endif %}
+  </section>
+</div>
+
+<section class="card" aria-labelledby="hist-h">
+  <div class="card-head"><h2 id="hist-h">History</h2><p class="card-sub">State changes, newest first</p></div>
+  {% if r.events %}
+  <ol class="history">
+    {% for e in r.events|reverse %}
+    <li><span class="mono hist-time">{{ clock.dt(e.t) }}</span><span class="hist-move">{% if e.from_state %}{{ state_labels.get(e.from_state, e.from_state) }} → {% endif %}{{ state_labels.get(e.to_state, e.to_state or 'note') }}</span>{% if e.detail %}<span class="hist-detail" dir="auto">{{ e.detail }}</span>{% endif %}</li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="note">No events recorded.</p>
+  {% endif %}
+</section>
+{% endblock %}

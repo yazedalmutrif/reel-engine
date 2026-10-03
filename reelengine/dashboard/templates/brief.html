@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block main %}
+<div class="page-head">
+  <h1>Filming brief</h1>
+  {% if brief %}
+  <p class="lede">Week of <span class="mono">{{ brief.week_start }}</span> · written {{ clock.dt(brief.generated) }} · {{ brief.scripts|length }} script{{ 's' if brief.scripts|length != 1 }}. Say the hook word for word; the rest is a guide, not a script.</p>
+  {% else %}
+  <p class="lede">This week's scripts to film, written every Saturday at 20:00 from the playbook, the trends and your numbers.</p>
+  {% endif %}
+</div>
+
+{% if brief %}
+{% if brief.notes %}
+<div class="callout" dir="auto"><span class="kpi-label">Notes</span><p dir="auto">{{ brief.notes }}</p></div>
+{% endif %}
+{% if brief.scripts %}
+<div class="grid grid-2 scripts">
+  {% for s in brief.scripts %}
+  <article class="card script" aria-labelledby="sc-{{ loop.index }}-h">
+    <div class="script-top">
+      <span class="script-n mono">{{ '%02d'|format(s.n or loop.index) }}</span>
+      <div class="chips">
+        {% if s.pillar %}<span class="chip">{{ pillar_names.get(s.pillar, s.pillar|human) }}</span>{% endif %}
+        {% if s.hook_type %}<span class="chip">Hook: {{ hook_names.get(s.hook_type) or (s.hook_type|human) }}</span>{% endif %}
+        {% if s.target_length_s %}<span class="chip mono">~{{ s.target_length_s }} s</span>{% elif s.duration_band %}<span class="chip mono">{{ s.duration_band }} s</span>{% endif %}
+        {% if s.experiment %}<span class="chip chip-accent">Tests {{ s.experiment }}</span>{% endif %}
+      </div>
+    </div>
+    <h2 id="sc-{{ loop.index }}-h" class="script-title"{{ (s.title or '')|langattrs }}>{{ s.title or ('Script ' ~ loop.index) }}</h2>
+
+    <div class="say">
+      <p class="kpi-label">Say this, word for word</p>
+      <p class="say-line" lang="ar" dir="rtl">{{ s.hook_line }}</p>
+    </div>
+
+    {% if s.on_screen %}
+    <p class="onscreen"><span class="kpi-label">On screen</span> <span lang="ar" dir="rtl">{{ s.on_screen }}</span></p>
+    {% endif %}
+
+    {% if s.beats %}
+    <div class="beats-wrap">
+      <p class="kpi-label">Beats</p>
+      <ol class="beats" lang="ar" dir="rtl">
+        {% for b in s.beats %}<li>{{ b }}</li>{% endfor %}
+      </ol>
+    </div>
+    {% endif %}
+
+    <dl class="facts facts-2 script-facts">
+      <div><dt>CTA{% if s.cta_type %} · {{ s.cta_type }}{% endif %}</dt><dd{{ (s.cta or '')|langattrs }}>{{ s.cta or '–' }}</dd></div>
+      <div><dt>Target length</dt><dd class="mono">{{ (s.target_length_s ~ ' s') if s.target_length_s else '–' }}{% if s.duration_band %} <span class="muted">({{ s.duration_band }} s band)</span>{% endif %}</dd></div>
+    </dl>
+    {% if s.shot_note %}<p class="shot"><span class="shot-icon" aria-hidden="true">◉</span><span><span class="kpi-label">Shot</span> <span dir="auto">{{ s.shot_note }}</span></span></p>{% endif %}
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<section class="card">{{ m.empty("The brief has no scripts", "The weekly run wrote a brief without scripts. Check the Health tab for brain errors.", "✎") }}</section>
+{% endif %}
+{% else %}
+<section class="card">{{ m.empty("No brief yet", "The first filming brief (5 to 7 scripts in Saudi dialect, with the hook to say word for word, three beats, a CTA and a shot note) is written on Saturday at 20:00.", "✎") }}</section>
+{% endif %}
+{% endblock %}

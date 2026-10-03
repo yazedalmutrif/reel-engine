@@ -1,0 +1,79 @@
+# EXAMPLE facts gate for a FICTIONAL creator ("Huda Example"). The real brand pack is personal and not published.
+# Captions, on-screen text, hooks, titles and the brief may only state facts about the creator listed under `facts`.
+# `forbidden` encodes the known traps (claims that were wrong in older drafts); any match is a HARD fail (the reel
+# is held). Matching is done on normalised text: Arabic diacritics/tatweel removed, أ/إ/آ→ا, ى→ي, ة→ه,
+# Arabic-Indic digits→0-9, case-insensitive. Patterns are Python regexes, normalised the same way.
+version: 1
+source: "example (fictional)"
+
+person:
+  name_en: "Huda Example"
+  name_ar: "هدى مثال"
+
+facts:
+  - id: name
+    en: "Name: Huda Example (Arabic: هدى مثال)."
+  - id: graduated_2026
+    en: "Graduated in 2026 (Information Systems)."
+  - id: queuewise_what
+    en: "QueueWise: an AI helpdesk-ticket triage prototype built by a team at the Example Hackathon 2026."
+  - id: queuewise_place
+    en: "QueueWise placed 2nd at the Example Hackathon 2026 (المركز الثاني). Never 'winner' or 'first'."
+    ar: "كيو وايز حصل على المركز الثاني في هاكاثون المثال"
+  - id: internship_dates
+    en: "IT support internship at Example Logistics Co., 1 Jun – 31 Jul 2026."
+  - id: receipt_reader
+    en: "Receipt Reader: a course project that reads Arabic receipts with OCR. No accuracy figure was measured."
+
+forbidden:
+  - id: hackathon_winner
+    reason: "QueueWise placed 2nd (المركز الثاني), never 'winner'/'first'."
+    scope: text
+    context: ["كيو وايز", "queuewise", "هاكاثون", "هاكثون", "hackathon"]
+    patterns: ["winner", "\\bwon\\b", "\\bwin\\b", "first place", "1st place", "champion", "فائز", "الفائز", "فزنا", "\\bفاز", "\\bفزت", "المركز الأول", "المرتبة الأولى", "\\bبطل"]
+  - id: hackathon_first
+    reason: "'الأول' next to the hackathon means first place; QueueWise was 2nd."
+    scope: window
+    window: 4
+    context: ["كيو وايز", "queuewise", "هاكاثون", "hackathon", "مسابقة", "جائزة", "مركز", "المركز", "المرتبة"]
+    patterns: ["\\bالأول\\b", "\\bالأولى\\b", "\\bأول مركز\\b"]
+  - id: placeholder_ticket_count
+    reason: "'~200 tickets' was a placeholder in an old draft; no ticket count exists."
+    scope: window
+    window: 4
+    context: ["تذكرة", "تذاكر", "تكت", "tickets?", "requests?"]
+    patterns: ["~?\\s*\\b200\\b", "\\bميتين\\b"]
+  - id: internship_three_months
+    reason: "The internship ran 1 Jun – 31 Jul 2026, not three months."
+    scope: text
+    context: ["تدريب", "التدريب", "training", "internship", "تعاوني"]
+    patterns: ["\\b3[\\s-]*months?\\b", "\\bthree[\\s-]*months?\\b", "ثلاث(ة)? (أشهر|شهور)", "\\b3\\s*(أشهر|شهور)"]
+    except_near: ["خطة", "خطه", "plan"]
+  - id: surname_spelling
+    reason: "The surname is Example, never 'Al-Example'."
+    scope: text
+    context: []
+    patterns: ["al[-\\s]?example"]
+  - id: receipt_accuracy
+    reason: "No accuracy was measured for Receipt Reader: never state a percentage."
+    scope: window
+    window: 6
+    context: ["receipt reader", "ريسيت ريدر", "ocr", "الفواتير", "فواتير"]
+    patterns: ["\\b\\d{1,3}(\\.\\d+)?\\s*%", "\\bدقة\\b", "\\baccuracy\\b"]
+
+# Mentions that REQUIRE a title (hard fail if the name appears without it). Fictional example.
+requires_titles:
+  - id: example_official_title
+    name: 'عبدالله المثالي'
+    title: 'سعادة'
+    reason: "The (fictional) sponsor is always named with his title (سعادة الأستاذ عبدالله المثالي)."
+
+# Phrases burned-in captions must never split across two caption chunks.
+keep_together:
+  - "المركز الثاني"
+  - "هاكاثون المثال"
+  - "Example Hackathon"
+  - "هدى مثال"
+  - "Huda Example"
+  - "Receipt Reader"
+  - "Claude Code"

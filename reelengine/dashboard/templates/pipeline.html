@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block main %}
+<div class="page-head">
+  <h1>Pipeline</h1>
+  <p class="lede">Every clip's path from the OneDrive inbox to Instagram. Click a card for the full reel.</p>
+</div>
+
+{% if not reel_count %}
+<section class="card">
+  {{ m.empty("No clips yet", "Film a clip and drop it in OneDrive › Reel Inbox. It is picked up within two 15-minute ticks and appears here as New.", "⇣") }}
+</section>
+{% endif %}
+
+<section class="section" aria-labelledby="att-h">
+  <div class="section-head">
+    <h2 id="att-h">Needs attention</h2>
+    <p class="section-sub">Reels a gate stopped or a stage could not finish. Nothing here is posted.</p>
+  </div>
+  {% set att_total = attention|sum(attribute='total') %}
+  {% if att_total %}
+  <div class="grid grid-2">
+    {% for lane in attention %}
+    <div class="lane lane-{{ lane.state }}">
+      <div class="lane-head">
+        <h3>{{ m.state(lane.state) }}</h3>
+        <span class="count mono">{{ lane.total }}</span>
+      </div>
+      <p class="lane-hint">{{ lane.hint }}</p>
+      {% if lane.cards %}
+      <ul class="lane-list">
+        {% for r in lane.cards %}<li>{{ m.rcard(r, root, clock) }}</li>{% endfor %}
+      </ul>
+      {% else %}
+      <p class="lane-empty">None</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card allclear">{{ m.sev_icon('good') }}<div><p class="alert-title">Nothing held or failed</p><p class="alert-text">When QA holds a reel (facts gate, a low critique score, a technical check) it shows here with the reason.</p></div></div>
+  {% endif %}
+</section>
+
+<section class="section" aria-labelledby="flow-h">
+  <div class="section-head">
+    <h2 id="flow-h">Flow</h2>
+    <p class="section-sub">New → transcribed → planned → rendered → QA passed → scheduled → publishing. Each 15-minute tick moves clips one or more steps.</p>
+  </div>
+  <div class="lanes">
+    {% for lane in flow %}
+    <div class="lane lane-{{ lane.state }}{% if not lane.cards %} lane-is-empty{% endif %}">
+      <div class="lane-head">
+        <h3>{{ m.state(lane.state) }}</h3>
+        <span class="count mono">{{ lane.total }}</span>
+      </div>
+      <p class="lane-hint">{{ lane.hint }}</p>
+      {% if lane.cards %}
+      <ul class="lane-list">
+        {% for r in lane.cards %}<li>{{ m.rcard(r, root, clock) }}</li>{% endfor %}
+      </ul>
+      {% else %}
+      <p class="lane-empty">None right now</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+<section class="section" aria-labelledby="pub-h">
+  <div class="section-head">
+    <h2 id="pub-h">{{ m.state('published') }} <span class="count mono">{{ pub_lane.total }}</span></h2>
+    <p class="section-sub">The latest {{ pub_lane.cards|length }} reels on the account{% if pub_lane.total > pub_lane.cards|length %}. <a href="reels.html">All {{ pub_lane.total }} published reels →</a>{% endif %}</p>
+  </div>
+  {% if pub_lane.cards %}
+  <ul class="pub-grid">
+    {% for r in pub_lane.cards %}<li>{{ m.rcard(r, root, clock) }}</li>{% endfor %}
+  </ul>
+  {% else %}
+  <div class="card">{{ m.empty("Nothing published yet", "Reels that pass QA get a slot and post automatically (in dry-run mode they are only logged).", "▶") }}</div>
+  {% endif %}
+</section>
+{% endblock %}

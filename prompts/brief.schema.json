@@ -1,0 +1,33 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["scripts", "notes"],
+  "properties": {
+    "scripts": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 7,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "pillar", "hook_type", "duration_band", "target_length_s", "hook_line", "on_screen", "beats", "cta", "cta_type", "shot_note", "experiment", "sources"],
+        "properties": {
+          "title": {"type": "string", "maxLength": 80},
+          "pillar": {"type": "string", "enum": ["ai_tools", "job_hunt", "build_proof", "cv_method"]},
+          "hook_type": {"type": "string", "enum": ["problem", "bold_claim", "list_number", "story", "pov_before_after", "question"]},
+          "duration_band": {"type": "string", "enum": ["20-30", "31-45", "46-60", "61-90"]},
+          "target_length_s": {"type": "integer", "minimum": 20, "maximum": 90},
+          "hook_line": {"type": "string", "maxLength": 200, "description": "Word for word, Saudi dialect, first 3 seconds"},
+          "on_screen": {"type": "string", "maxLength": 60, "description": "Hook card, max 7 words"},
+          "beats": {"type": "array", "items": {"type": "string", "maxLength": 240}, "minItems": 3, "maxItems": 3},
+          "cta": {"type": "string", "maxLength": 200},
+          "cta_type": {"type": "string", "enum": ["follow", "save", "send", "comment", "none"]},
+          "shot_note": {"type": "string", "maxLength": 240, "description": "Framing, light, place"},
+          "experiment": {"type": "string", "maxLength": 120},
+          "sources": {"type": "array", "items": {"type": "string", "maxLength": 300}, "maxItems": 4, "description": "Links for any outside fact (programme requirements, dates), with the date checked"}
+        }
+      }
+    },
+    "notes": {"type": "string", "maxLength": 600}
+  }
+}

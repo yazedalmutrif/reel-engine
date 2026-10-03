@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reelengine"
+version = "1.0.0"
+description = "Autonomous, self-improving Instagram Reels pipeline for one creator account (dry-run by default)."
+requires-python = ">=3.10,<3.11"
+authors = [{ name = "Yazeed Almutrif" }]
+readme = "README.md"
+
+[project.scripts]
+reel = "reelengine.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["reelengine*"]
+
+[tool.setuptools.package-data]
+reelengine = ["dashboard/templates/*.html", "dashboard/static/*", "*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "e2e: end-to-end run on the synthetic clip (GPU + ffmpeg, slow)",
+  "brain: makes real Claude CLI calls (uses Yazeed's subscription)",
+]
+addopts = "-m 'not e2e and not brain'"
+
+[tool.bandit]
+exclude_dirs = [".venv", "tests", "data", "bin", "models"]

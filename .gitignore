@@ -1,0 +1,51 @@
+# runtime data, models and binaries (large, personal, or regenerated)
+data/
+models/
+bin/
+logs_setup/
+.venv/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.log
+__pycache__/
+*.egg-info/
+.pytest_cache/
+# secrets never live in files, but just in case
+.env
+.env.*
+*.token
+*secret*.txt
+*.pem
+*.key
+cookies*
+*session*.json
+# videos: own footage and renders never go in git (the e2e sample reels are regenerated)
+*.mov
+*.mp4
+*.m4v
+*.wav
+docs/qa/e2e/*.mp4
+
+# personal settings: local paths (inbox, vault, backups). config.example.toml is the published template
+config.toml
+*.local.txt
+*.local.json
+
+# the owner's personal brand pack (facts about him, voice, hook bank, episode ideas, CTAs, starting playbook).
+# brand.example/ is the published fictional pack; gates.yaml, styles.yaml and fonts/ are generic and published.
+brand/facts.yaml
+brand/voice.md
+brand/hooks.yaml
+brand/episodes.yaml
+brand/captions.yaml
+brand/never_say.yaml
+brand/playbook_seed.md
+brand/playbook_v1.json
+# tests and docs written around those personal facts (kept locally)
+tests/test_gates.py
+docs/SPEC.md
+docs/DECISIONS.md
+docs/BUILD_REPORT.md
+docs/FACTCHECK_*.md

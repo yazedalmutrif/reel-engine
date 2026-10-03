@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block main %}
+<div class="page-head">
+  <h1>Health</h1>
+  <p class="lede">Is the engine running, can it reach Instagram, and does the computer have room to work?</p>
+</div>
+
+<section class="kpis kpis-health" aria-labelledby="hk-h">
+  <h2 id="hk-h" class="sr-only">Health at a glance</h2>
+  <div class="kpi">
+    <p class="kpi-label">Last tick</p>
+    {% if tick_stats.last %}
+    <p class="kpi-value kpi-value-sm">{{ clock.rel(tick_stats.last.start) }}</p>
+    <p class="kpi-sub">{{ m.sev_icon('good' if tick_stats.last.status == 'ok' else ('critical' if tick_stats.last.status == 'error' else 'warning')) }} {{ tick_stats.last.status or 'running' }} · {{ tick_stats.last.dur|secs }}</p>
+    {% else %}
+    <p class="kpi-value kpi-value-sm">Never</p>
+    <p class="kpi-sub">The 15-minute task has not run yet</p>
+    {% endif %}
+  </div>
+  <div class="kpi">
+    <p class="kpi-label">Ticks · 3 days</p>
+    {% if tick_stats.n %}
+    <p class="kpi-value">{{ (tick_stats.ok / tick_stats.n)|pct }}</p>
+    <p class="kpi-sub">ok · {{ tick_stats.err }} error{{ 's' if tick_stats.err != 1 }} of {{ tick_stats.n }}</p>
+    {% else %}
+    <p class="kpi-value kpi-value-sm">–</p><p class="kpi-sub">No ticks recorded</p>
+    {% endif %}
+  </div>
+  <div class="kpi">
+    <p class="kpi-label">Instagram token</p>
+    {% if token.days_left is not none %}
+    <p class="kpi-value">{{ token.days_left|round|int }} <span class="unit">days</span></p>
+    {{ token_meter }}
+    <p class="kpi-sub">expires {{ clock.date(token.expires) }}</p>
+    {% else %}
+    <p class="kpi-value kpi-value-sm">{{ 'Not connected' if token.status == 'missing' else token.status|human }}</p>
+    <p class="kpi-sub">Connect once with <span class="mono">reel connect</span> (docs/SETUP.md)</p>
+    {% endif %}
+  </div>
+  <div class="kpi">
+    <p class="kpi-label">Auth</p>
+    {% set ts = token.status %}
+    <p class="kpi-badge"><span class="chip {{ 'chip-good' if ts == 'ok' else ('chip-bad' if ts == 'auth_needed' else 'chip-muted') }}"><span class="dot" aria-hidden="true"></span>{{ {'ok': 'Connected', 'auth_needed': 'Reconnect needed', 'missing': 'Not connected', 'unknown': 'Unknown'}.get(ts, ts|human) }}</span></p>
+    <p class="kpi-sub">{% if token.username %}<span class="mono">@{{ token.username }}</span>{% if token.account_type %} · {{ token.account_type|lower }}{% endif %}{% else %}no account linked{% endif %}{% if token.last_check %} · checked {{ clock.rel(token.last_check) }}{% endif %}</p>
+  </div>
+  <div class="kpi">
+    <p class="kpi-label">Publishing quota</p>
+    {% if quota %}
+    <p class="kpi-value">{{ quota.used }}<span class="unit"> / {{ quota.total }}</span></p>
+    {{ quota.meter }}
+    <p class="kpi-sub">posts in the last 24 h · {{ clock.rel(quota.t) }}</p>
+    {% else %}
+    <p class="kpi-value kpi-value-sm">–</p><p class="kpi-sub">Read before each live publish</p>
+    {% endif %}
+  </div>
+  <div class="kpi">
+    <p class="kpi-label">App usage</p>
+    {% if app_usage %}
+    <p class="kpi-value">{{ '%.0f'|format(app_usage.pct) }}<span class="unit">%</span></p>
+    {{ app_usage.meter }}
+    <p class="kpi-sub">backs off at {{ '%.0f'|format(app_usage.limit) }}% · {{ api_calls_24h }} calls in 24 h</p>
+    {% else %}
+    <p class="kpi-value kpi-value-sm">–</p><p class="kpi-sub">No API calls yet</p>
+    {% endif %}
+  </div>
+  <div class="kpi">
+    <p class="kpi-label">Disk free</p>
+    {% if disk %}
+    <p class="kpi-value">{{ '%.0f'|format(disk.free_gb) }} <span class="unit">GB</span></p>
+    {{ disk.meter }}
+    <p class="kpi-sub">of {{ '%.0f'|format(disk.total_gb) }} GB · minimum {{ '%.0f'|format(disk.min_gb) }} GB</p>
+    {% else %}
+    <p class="kpi-value kpi-value-sm">n/a</p><p class="kpi-sub">Could not read the disk</p>
+    {% endif %}
+  </div>
+  <div class="kpi">
+    <p class="kpi-label">GPU</p>
+    {% if gpu.ok %}
+    <p class="kpi-value">{{ '%.0f'|format(gpu.util or 0) }}<span class="unit">%</span></p>
+    <p class="kpi-sub">{{ gpu.name }} · {{ '%.1f'|format((gpu.mem_used or 0) / 1024) }}/{{ '%.0f'|format((gpu.mem_total or 0) / 1024) }} GB · {{ '%.0f'|format(gpu.temp or 0) }}°C</p>
+    {% else %}
+    <p class="kpi-value kpi-value-sm">n/a</p><p class="kpi-sub">nvidia-smi did not answer</p>
+    {% endif %}
+  </div>
+  <div class="kpi">
+    <p class="kpi-label">Last backup</p>
+    {% if backups %}{% set b = backups[0] %}
+    <p class="kpi-value kpi-value-sm">{{ clock.rel(b.t) }}</p>
+    <p class="kpi-sub">{{ m.sev_icon('good' if b.ok else 'critical') }} {{ 'ok' if b.ok else 'failed' }} · {{ b.size_bytes|bytes }}{% if b.onedrive_copy %} · copied to OneDrive{% endif %}</p>
+    {% else %}
+    <p class="kpi-value kpi-value-sm">None yet</p><p class="kpi-sub">The daily 03:30 run backs up the DB</p>
+    {% endif %}
+  </div>
+  <div class="kpi">
+    <p class="kpi-label">Brain calls · 7 days</p>
+    <p class="kpi-value">{{ brain.n }}</p>
+    <p class="kpi-sub">{% if brain.n %}{{ brain.fail }} failed · avg {{ brain.avg|secs }}{% else %}Claude runs for edit plans, captions, critiques{% endif %}</p>
+  </div>
+</section>
+
+<section class="card" aria-labelledby="tk-h">
+  <div class="card-head">
+    <h2 id="tk-h">Tick history</h2>
+    <p class="card-sub">Every 15 minutes, last 3 days ({{ tz_name }})</p>
+  </div>
+  {% if tick_strip %}
+  <p class="legend">{{ m.legend_dot("ok", "k-good") }}{{ m.legend_dot("error", "k-critical") }}{{ m.legend_dot("skipped / locked", "k-neutral") }}{{ m.legend_dot("paused", "k-warning") }}{{ m.legend_dot("no tick", "k-empty") }}</p>
+  {{ tick_strip }}
+  <dl class="facts facts-inline">
+    <div><dt>Median run</dt><dd class="mono">{{ tick_stats.median|secs }}</dd></div>
+    <div><dt>95th percentile</dt><dd class="mono">{{ tick_stats.p95|secs }}</dd></div>
+    <div><dt>Last daily</dt><dd class="mono">{{ clock.dt(tick_stats.last_daily.start) if tick_stats.last_daily else '–' }}</dd></div>
+    <div><dt>Last weekly</dt><dd class="mono">{{ clock.dt(tick_stats.last_weekly.start) if tick_stats.last_weekly else '–' }}</dd></div>
+  </dl>
+  {% else %}
+  {{ m.empty("No ticks yet", "Once the scheduled task runs, each 15-minute tick shows here as a green (ok) or red (error) cell.", "▤") }}
+  {% endif %}
+</section>
+
+<section class="card" aria-labelledby="td-h">
+  <div class="card-head">
+    <h2 id="td-h">Tick duration</h2>
+    <p class="card-sub">Seconds per tick; spikes are ticks that processed a clip. Red dots ended in an error.</p>
+  </div>
+  {% if dur_chart %}
+  <p class="legend">{{ m.legend_line("duration", "k-accent") }}{{ m.legend_dot("error", "k-critical") }}</p>
+  {{ dur_chart }}
+  {% else %}
+  {{ m.empty("Not enough ticks", "Durations are drawn once there are at least two finished ticks.", "⌁") }}
+  {% endif %}
+</section>
+
+<div class="grid grid-21">
+  <section class="card" aria-labelledby="er-h">
+    <div class="card-head"><h2 id="er-h">Recent errors</h2><p class="card-sub">Last 7 days</p></div>
+    {% if errors %}
+    <ul class="errors">
+      {% for e in errors %}
+      <li><p class="err-meta"><span class="mono">{{ clock.dt(e.t) }}</span> <span class="chip chip-sm">{{ e.src }}</span></p><p class="err-msg mono" dir="auto">{{ e.msg }}</p></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="allclear">{{ m.sev_icon('good') }}<div><p class="alert-title">No errors in the last 7 days</p><p class="alert-text">Tick errors, failed brain calls and error notifications are listed here.</p></div></div>
+    {% endif %}
+  </section>
+
+  <div class="stack">
+    <section class="card" aria-labelledby="bc-h">
+      <div class="card-head"><h2 id="bc-h">Brain calls by task</h2><p class="card-sub">7 days</p></div>
+      {% if brain.tasks %}
+      <table class="tbl tbl-compact">
+        <caption class="sr-only">Claude calls by task in the last 7 days</caption>
+        <thead><tr><th scope="col">Task</th><th scope="col" class="num">Calls</th><th scope="col" class="num">Failed</th><th scope="col" class="num">Avg</th></tr></thead>
+        <tbody>{% for t in brain.tasks %}<tr><th scope="row" class="mono">{{ t.task }}</th><td class="num">{{ t.n }}</td><td class="num">{{ t.fail }}</td><td class="num">{{ t.avg|secs }}</td></tr>{% endfor %}</tbody>
+      </table>
+      {% else %}
+      <p class="note">No calls in the last 7 days.</p>
+      {% endif %}
+    </section>
+    <section class="card" aria-labelledby="bk-h">
+      <div class="card-head"><h2 id="bk-h">Backups</h2><p class="card-sub">Newest first, 7 kept</p></div>
+      {% if backups %}
+      <table class="tbl tbl-compact">
+        <caption class="sr-only">Database backups</caption>
+        <thead><tr><th scope="col">When</th><th scope="col" class="num">Size</th><th scope="col">Status</th></tr></thead>
+        <tbody>{% for b in backups %}<tr><th scope="row" class="mono">{{ clock.dt(b.t) }}</th><td class="num">{{ b.size_bytes|bytes }}</td><td>{{ m.sev_icon('good' if b.ok else 'critical') }} {{ 'ok' if b.ok else 'failed' }}</td></tr>{% endfor %}</tbody>
+      </table>
+      {% else %}
+      <p class="note">No backups yet.</p>
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="{{ csp }}">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="dark">
+<title>{{ page_label }} · Reel Engine{% if demo %} (demo){% endif %}</title>
+<link rel="icon" href="{{ root }}assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="{{ root }}assets/app.css">
+</head>
+<body class="page-{{ page }}">
+<a class="skip" href="#main">Skip to content</a>
+{% if demo %}
+<div class="demo-banner" role="note"><span class="demo-tag">DEMO DATA:</span> fake reels for layout review, nothing here is real</div>
+{% endif %}
+<header class="top">
+  <div class="wrap top-row">
+    <a class="brand" href="{{ root }}index.html" aria-label="Reel Engine, Overview">
+      <svg class="brand-mark" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true" focusable="false"><rect width="32" height="32" rx="8" fill="#232329"/><rect x="9" y="6" width="14" height="20" rx="3" fill="none" stroke="#B570FF" stroke-width="2.4"/><path d="M14 12.5v7l5.5-3.5z" fill="#B570FF"/></svg>
+      <span class="brand-name">Reel Engine</span>
+    </a>
+    <div class="top-meta">
+      <span class="badge badge-{{ mode.badge.sev }}" title="Engine mode"><span class="badge-icon" aria-hidden="true">{{ mode.badge.icon }}</span>{{ mode.badge.text }}</span>
+      <span class="updated"><span class="updated-label">Updated</span> <time datetime="{{ updated_iso }}">{{ updated }}</time> <span class="tz">{{ tz_name }}</span></span>
+    </div>
+  </div>
+  <nav class="wrap tabs" aria-label="Dashboard sections">
+    {% for name, label in pages %}
+    <a href="{{ root }}{{ name }}.html"{% if page == name %} aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </nav>
+</header>
+<main id="main" class="wrap" tabindex="-1">
+{% block main %}{% endblock %}
+</main>
+<footer class="wrap foot">
+  <p>Reel Engine dashboard · read-only · served on this computer only{% if demo %} · <strong>demo data</strong>{% endif %}</p>
+  <p>Mode <span class="mono">{{ mode.mode }}</span>{% if mode.paused %} · publishing paused{% endif %} · times in {{ tz_name }}</p>
+</footer>
+</body>
+</html>

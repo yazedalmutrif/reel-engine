@@ -1,0 +1,76 @@
+# EXAMPLE caption templates, CTA lines and hashtag pool (fictional creator).
+templates:
+  A:
+    name: short (reach)
+    skeleton: '{{HOOK_LINE}}
+
+      {{ONE_LINE_VALUE}}
+
+      {{CTA}}
+
+      {{HASHTAGS_3_TO_5}}'
+  B:
+    name: value list (saves)
+    skeleton: '{{HOOK_LINE}} 👇
+
+      1) {{POINT_1}}
+
+      2) {{POINT_2}}
+
+      3) {{POINT_3}}
+
+      {{SOURCE_LINE, if outside facts: "المصدر: {{SOURCE}} · تم التحقق {{DATE_CHECKED}}"}}
+
+      {{CTA_SAVE}}
+
+      {{HASHTAGS_3_TO_5}}'
+  C:
+    name: story (trust)
+    skeleton: '{{HOOK_LINE}}
+
+      {{WHAT_HAPPENED, 1–2 lines, only verified facts}}
+
+      {{WHAT_I_LEARNED ✍️ in the creator''s own words, never invented}}
+
+      {{TAKEAWAY_FOR_YOU}}
+
+      {{CTA}}
+
+      {{HASHTAGS_3_TO_5}}'
+ctas:
+- id: C01
+  cta_type: follow
+  text: تابعني، كل مقطع فيه خطوة تقدر تطبقها.
+  condition: null
+- id: C02
+  cta_type: save
+  text: احفظ المقطع، بتحتاجه وقت التقديم.
+  condition: null
+- id: C03
+  cta_type: save
+  text: احفظه وارجع له قبل المقابلة.
+  condition: null
+- id: C04
+  cta_type: send
+  text: أرسله لأحد توه متخرج.
+  condition: null
+- id: C05
+  cta_type: comment
+  text: وش أكثر شي محيرك في البحث عن وظيفة؟
+  condition: null
+- id: C06
+  cta_type: comment
+  text: جربتها؟ قل لي وش طلع معك.
+  condition: null
+service_ctas_draft: []
+hashtag_pool:
+- '#الذكاء_الاصطناعي'
+- '#AI'
+- '#وظائف'
+- '#خريجين'
+- '#سيرة_ذاتية'
+- '#تقنية'
+pipeline_rules: (1) the first line repeats the spoken hook's idea in ≤ 125 characters; (2) every number maps to a fact or a dated source; (3) one CTA only; (4) 3–5 hashtags.
+first_line_max_chars: 125
+hashtags_min: 3
+hashtags_max: 5

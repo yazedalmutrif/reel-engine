@@ -1,0 +1,386 @@
+{
+  "version": 1,
+  "created_at": "2026-01-01",
+  "source": "brand.example/playbook_seed.md (generic example starting rules)",
+  "summary": "Example starting playbook: generic rules, every arm starts even except a mild prior on 46-60 s. The account's own Insights decide from here.",
+  "rules": [
+    {
+      "id": "R1",
+      "text": "Burned-in captions, and the first 3 s name the problem or the payoff. No slow intro.",
+      "evidence": "OFFICIAL",
+      "locked": false
+    },
+    {
+      "id": "R2",
+      "text": "Default length 45-75 s; avoid very short or very long reels.",
+      "evidence": "OBSERVED",
+      "locked": false
+    },
+    {
+      "id": "R3",
+      "text": "Keep everything under 3 min (the engine caps at 90 s).",
+      "evidence": "OBSERVED",
+      "locked": false
+    },
+    {
+      "id": "R4",
+      "text": "3-5 hashtags, never more than 5, topic-specific.",
+      "evidence": "OFFICIAL",
+      "locked": true
+    },
+    {
+      "id": "R5",
+      "text": "Put real keywords (Arabic + English tool names) in the caption and on-screen text.",
+      "evidence": "OFFICIAL",
+      "locked": false
+    },
+    {
+      "id": "R6",
+      "text": "Only the creator's own filmed footage. No reposts, no watermarks.",
+      "evidence": "OFFICIAL",
+      "locked": true
+    },
+    {
+      "id": "R7",
+      "text": "No engagement bait.",
+      "evidence": "brand rule",
+      "locked": true
+    },
+    {
+      "id": "R8",
+      "text": "No guaranteed outcomes about jobs, salaries or AI results.",
+      "evidence": "OFFICIAL",
+      "locked": true
+    },
+    {
+      "id": "R9",
+      "text": "Check Account Status weekly.",
+      "evidence": "OFFICIAL",
+      "locked": false
+    },
+    {
+      "id": "R10",
+      "text": "No Trial Reels until 1,000 followers.",
+      "evidence": "OBSERVED",
+      "locked": true
+    },
+    {
+      "id": "R11",
+      "text": "Cover: 1080x1920 with the face and text in the central ~1:1.",
+      "evidence": "OBSERVED",
+      "locked": false
+    },
+    {
+      "id": "R12",
+      "text": "Post consistently, but never sacrifice quality to hit a quota.",
+      "evidence": "OFFICIAL",
+      "locked": true
+    },
+    {
+      "id": "R13",
+      "text": "Audio is baked into the file. Check the live publishing quota.",
+      "evidence": "OBSERVED",
+      "locked": true
+    },
+    {
+      "id": "R14",
+      "text": "Don't assume API posts get less reach; let the data decide.",
+      "evidence": "FOLKLORE",
+      "locked": false
+    },
+    {
+      "id": "R15",
+      "text": "'Best time' tables are starting guesses; the account's Insights decide.",
+      "evidence": "OFFICIAL",
+      "locked": false
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "H1",
+      "text": "Hook style: problem vs bold claim / myth-bust vs list (plus question, story, POV/before-after).",
+      "metric": "reels_skip_rate, watch_ratio",
+      "dimension": "hook_type",
+      "status": "running"
+    },
+    {
+      "id": "H2",
+      "text": "Length band: 20-30 s vs 31-45 s vs 46-60 s vs 61-90 s.",
+      "metric": "watch_ratio, shares_per_reach",
+      "dimension": "duration_band",
+      "status": "running"
+    },
+    {
+      "id": "H3",
+      "text": "Posting slot: weekday vs weekend x 13:30 / 18:30 / 21:30 / 22:30.",
+      "metric": "composite",
+      "dimension": "slot",
+      "status": "running"
+    },
+    {
+      "id": "H4",
+      "text": "Caption style: natural sentences with keywords vs short caption with keywords on screen.",
+      "metric": "reach (non-follower)",
+      "dimension": "caption_style",
+      "status": "logging"
+    },
+    {
+      "id": "H5",
+      "text": "Hashtags: 3 specific vs 5.",
+      "metric": "reach",
+      "dimension": "hashtag_count",
+      "status": "logging"
+    },
+    {
+      "id": "H6",
+      "text": "CTA: send vs save vs none, never bait.",
+      "metric": "shares_per_reach, saves_per_reach",
+      "dimension": "cta_type",
+      "status": "logging"
+    },
+    {
+      "id": "H7",
+      "text": "Publishing method: API vs in-app.",
+      "metric": "reach",
+      "dimension": null,
+      "status": "parked"
+    },
+    {
+      "id": "H8",
+      "text": "Format: list vs single-tip explainer vs myth-bust on the same topic.",
+      "metric": "composite",
+      "dimension": "format",
+      "status": "next"
+    }
+  ],
+  "arms": {
+    "slot": [
+      {
+        "id": "weekday-13:30",
+        "day_type": "weekday",
+        "time": "13:30"
+      },
+      {
+        "id": "weekday-18:30",
+        "day_type": "weekday",
+        "time": "18:30"
+      },
+      {
+        "id": "weekday-21:30",
+        "day_type": "weekday",
+        "time": "21:30"
+      },
+      {
+        "id": "weekday-22:30",
+        "day_type": "weekday",
+        "time": "22:30"
+      },
+      {
+        "id": "weekend-13:30",
+        "day_type": "weekend",
+        "time": "13:30"
+      },
+      {
+        "id": "weekend-18:30",
+        "day_type": "weekend",
+        "time": "18:30"
+      },
+      {
+        "id": "weekend-21:30",
+        "day_type": "weekend",
+        "time": "21:30"
+      },
+      {
+        "id": "weekend-22:30",
+        "day_type": "weekend",
+        "time": "22:30"
+      }
+    ],
+    "hook_type": [
+      {
+        "id": "problem",
+        "label": "Problem / mistake",
+        "brand_types": [
+          "Mistake"
+        ]
+      },
+      {
+        "id": "bold_claim",
+        "label": "Bold claim / myth-bust",
+        "brand_types": [
+          "Bold claim",
+          "Myth-bust"
+        ]
+      },
+      {
+        "id": "list_number",
+        "label": "Number / list",
+        "brand_types": [
+          "Number / list"
+        ]
+      },
+      {
+        "id": "story",
+        "label": "Story",
+        "brand_types": [
+          "Story"
+        ]
+      },
+      {
+        "id": "pov_before_after",
+        "label": "POV / before-after",
+        "brand_types": [
+          "POV",
+          "Before / after"
+        ]
+      },
+      {
+        "id": "question",
+        "label": "Question",
+        "brand_types": [
+          "Question"
+        ]
+      }
+    ],
+    "duration_band": [
+      {
+        "id": "20-30",
+        "min_s": 20,
+        "max_s": 30
+      },
+      {
+        "id": "31-45",
+        "min_s": 31,
+        "max_s": 45
+      },
+      {
+        "id": "46-60",
+        "min_s": 46,
+        "max_s": 60,
+        "prior_favourite": true
+      },
+      {
+        "id": "61-90",
+        "min_s": 61,
+        "max_s": 90
+      }
+    ]
+  },
+  "priors": {
+    "duration_band": {
+      "46-60": {
+        "alpha": 2,
+        "beta": 1
+      }
+    }
+  },
+  "weekend_days": [
+    "Fri",
+    "Sat"
+  ],
+  "logged_factors": {
+    "cta_type": [
+      "send",
+      "save",
+      "none",
+      "follow",
+      "comment"
+    ],
+    "hashtag_count": [
+      3,
+      5
+    ],
+    "caption_style": [
+      "natural_keywords",
+      "short"
+    ]
+  },
+  "defaults": {
+    "hashtag_count": 5,
+    "cta_type": "save",
+    "caption_style": "natural_keywords",
+    "target_band": "46-60"
+  },
+  "topics": [
+    {
+      "id": "ai_tools",
+      "label": "AI tools in practice",
+      "purpose": "reach"
+    },
+    {
+      "id": "job_hunt",
+      "label": "From graduation to the first job",
+      "purpose": "reach+trust"
+    },
+    {
+      "id": "build_proof",
+      "label": "Build in public",
+      "purpose": "trust"
+    },
+    {
+      "id": "cv_method",
+      "label": "CV method",
+      "purpose": "conversion"
+    }
+  ],
+  "caption_style": {
+    "first_line_max_chars": 125,
+    "keywords": "Arabic term once next to the English one, e.g. الذكاء الاصطناعي (AI)",
+    "tone": "Casual Saudi, warm, direct (brand voice.md)",
+    "emoji_max": 3
+  },
+  "trial_reels": {
+    "enabled": false,
+    "min_followers": 1000
+  },
+  "experiments": [
+    {
+      "id": "E1",
+      "hypothesis": "H1",
+      "dimension": "hook_type",
+      "status": "running"
+    },
+    {
+      "id": "E2",
+      "hypothesis": "H2",
+      "dimension": "duration_band",
+      "status": "running"
+    },
+    {
+      "id": "E3",
+      "hypothesis": "H3",
+      "dimension": "slot",
+      "status": "running"
+    },
+    {
+      "id": "E4",
+      "hypothesis": "H4",
+      "dimension": "caption_style",
+      "status": "logging"
+    },
+    {
+      "id": "E5",
+      "hypothesis": "H5",
+      "dimension": "hashtag_count",
+      "status": "logging"
+    },
+    {
+      "id": "E6",
+      "hypothesis": "H6",
+      "dimension": "cta_type",
+      "status": "logging"
+    },
+    {
+      "id": "E7",
+      "hypothesis": "H7",
+      "dimension": null,
+      "status": "parked"
+    },
+    {
+      "id": "E8",
+      "hypothesis": "H8",
+      "dimension": "format",
+      "status": "next"
+    }
+  ]
+}

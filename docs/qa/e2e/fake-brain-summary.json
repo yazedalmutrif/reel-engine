@@ -1,0 +1,60 @@
+{
+ "reel": 1,
+ "source_s": 39.028,
+ "output_s": 17.066,
+ "cuts": 3,
+ "keep_segments": [
+  1,
+  3,
+  6,
+  7
+ ],
+ "segments_total": 8,
+ "caption_fixes": [],
+ "hook_on_screen": "3 خطوات قبل ما تقدم",
+ "transcription": {
+  "device": "cuda",
+  "elapsed_s": 3.16,
+  "words": 44
+ },
+ "stage_seconds_to_reach_state": {
+  "transcribed": 12.0,
+  "planned": 0.0,
+  "rendered": 11.0,
+  "qa_passed": 1.0,
+  "scheduled": 0.0,
+  "publishing": 0.0,
+  "published": 0.0
+ },
+ "loudness_lufs": -14.2,
+ "true_peak_dbfs": -1.3,
+ "scores": {
+  "accuracy": 9,
+  "clarity": 8,
+  "hook": 8,
+  "value": 8
+ },
+ "scheduled_at": "2026-09-30T18:30:00+00:00",
+ "slot": "weekday-21:30",
+ "media_id": "dryrun-1",
+ "brain_calls": [
+  {
+   "task": "edit_plan",
+   "attempts": 1,
+   "ok": 1,
+   "duration_s": 0.0
+  },
+  {
+   "task": "caption",
+   "attempts": 1,
+   "ok": 1,
+   "duration_s": 0.01
+  },
+  {
+   "task": "critique",
+   "attempts": 1,
+   "ok": 1,
+   "duration_s": 0.01
+  }
+ ]
+}

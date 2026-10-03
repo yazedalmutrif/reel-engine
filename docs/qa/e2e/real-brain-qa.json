@@ -1,0 +1,163 @@
+{
+ "at": "2026-09-29T19:57:47+00:00",
+ "checks": [
+  {
+   "detail": "mov,mp4,m4a,3gp,3g2,mj2",
+   "hard": true,
+   "name": "container",
+   "ok": true
+  },
+  {
+   "detail": "h264 High",
+   "hard": true,
+   "name": "video_codec",
+   "ok": true
+  },
+  {
+   "detail": "1080x1920 rot 0",
+   "hard": true,
+   "name": "resolution",
+   "ok": true
+  },
+  {
+   "detail": "30.0",
+   "hard": true,
+   "name": "fps",
+   "ok": true
+  },
+  {
+   "detail": "yuv420p",
+   "hard": true,
+   "name": "pix_fmt",
+   "ok": true
+  },
+  {
+   "detail": "aac 48000 Hz 2 ch",
+   "hard": true,
+   "name": "audio",
+   "ok": true
+  },
+  {
+   "detail": "17.1 s (allowed 5-90 s)",
+   "hard": true,
+   "name": "duration_band",
+   "ok": true
+  },
+  {
+   "detail": "5.8 MB",
+   "hard": true,
+   "name": "file_size",
+   "ok": true
+  },
+  {
+   "detail": "2.7 Mb/s",
+   "hard": true,
+   "name": "bitrate",
+   "ok": true
+  },
+  {
+   "detail": "ftyp moov free mdat",
+   "hard": true,
+   "name": "faststart",
+   "ok": true
+  },
+  {
+   "detail": "",
+   "hard": true,
+   "name": "no_edit_list",
+   "ok": true
+  },
+  {
+   "detail": "-14.2 LUFS (target -14.0)",
+   "hard": true,
+   "name": "loudness",
+   "ok": true
+  },
+  {
+   "detail": "-1.3 dBFS",
+   "hard": true,
+   "name": "true_peak",
+   "ok": true
+  },
+  {
+   "detail": "0 s black",
+   "hard": true,
+   "name": "black_frames",
+   "ok": true
+  },
+  {
+   "detail": "longest freeze 0.0 s",
+   "hard": true,
+   "name": "frozen_frames",
+   "ok": true
+  },
+  {
+   "detail": "10 chunks",
+   "hard": true,
+   "name": "captions_present",
+   "ok": true
+  },
+  {
+   "detail": "0.60% accent pixels in the caption band at 7.7 s",
+   "hard": true,
+   "name": "captions_burned",
+   "ok": true
+  },
+  {
+   "detail": "scores {'hook': 7, 'clarity': 8, 'value': 7, 'accuracy': 9}",
+   "hard": true,
+   "name": "critique_scores",
+   "ok": true
+  },
+  {
+   "detail": "all claims verified",
+   "hard": true,
+   "name": "critique_facts",
+   "ok": true
+  },
+  {
+   "detail": "",
+   "hard": true,
+   "name": "critique_violations",
+   "ok": true
+  },
+  {
+   "detail": "",
+   "hard": true,
+   "name": "dialect",
+   "ok": true
+  }
+ ],
+ "critique": {
+  "claims_about_yazeed": [],
+  "dialect_ok": true,
+  "fixes": [
+   "Spoken script says update LinkedIn 'كل أسبوع' while the IG caption says 'أول بأول' — pick one for consistency.",
+   "Sharpen the hook card with a concrete pain point (e.g. a common CV mistake) instead of the generic '3 خطوات' framing to boost stop-scroll power.",
+   "Consider naming what makes a CV 'واضح' (e.g. one page, quantified results) to make the tip more concrete/actionable."
+  ],
+  "scores": {
+   "accuracy": 9,
+   "clarity": 8,
+   "hook": 7,
+   "value": 7
+  },
+  "spelling_issues": [],
+  "summary": "A clean, dialect-appropriate 3-tips reel on job prep (CV+GitHub link, LinkedIn upkeep, AI side project); no claims about Yazeed and it uses one pre-approved save CTA, so no rule violations. Minor polish possible on the hook and internal consistency.",
+  "violations": []
+ },
+ "hard_fails": [],
+ "measures": {
+  "black_s": 0,
+  "freeze_max_s": 0.0,
+  "integrated_lufs": -14.2,
+  "true_peak_dbfs": -1.3
+ },
+ "passed": true,
+ "scores": {
+  "accuracy": 9,
+  "clarity": 8,
+  "hook": 7,
+  "value": 7
+ }
+}

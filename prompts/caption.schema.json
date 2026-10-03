@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["first_line", "body", "cta_text", "hashtags", "keywords"],
+  "properties": {
+    "first_line": {"type": "string", "minLength": 5, "maxLength": 125, "description": "Second hook, <= 125 characters, Saudi dialect"},
+    "body": {"type": "string", "minLength": 0, "maxLength": 1500, "description": "Value body; empty allowed for the short style"},
+    "cta_text": {"type": "string", "maxLength": 200, "description": "Exactly one line copied from the allowed CTA list, or empty when the CTA type is none"},
+    "hashtags": {"type": "array", "items": {"type": "string", "pattern": "^#[^\\s#]{2,40}$"}, "minItems": 0, "maxItems": 5},
+    "keywords": {"type": "array", "items": {"type": "string", "maxLength": 40}, "maxItems": 10, "description": "Search keywords used in the caption (Arabic + English)"}
+  }
+}

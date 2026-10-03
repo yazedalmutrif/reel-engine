@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block main %}
+<div class="page-head">
+  <h1>Money</h1>
+  <p class="lede">The path from views to paid work: the service offer, clicks on the profile link, and orders you enter by hand.</p>
+</div>
+
+<div class="grid grid-2">
+  <section class="card offer" aria-labelledby="of-h">
+    <div class="card-head"><h2 id="of-h">Service offer</h2>
+      {% if service_enabled %}<span class="chip chip-good"><span class="dot" aria-hidden="true"></span>On</span>{% else %}<span class="chip chip-muted"><span class="dot" aria-hidden="true"></span>Off</span>{% endif %}
+    </div>
+    {% if service_enabled %}
+    <p class="big-line">The service CTA is on.</p>
+    <p class="note">Captions may use the service call to action (personal job map / CV review).</p>
+    {% else %}
+    <p class="big-line">Off until the offer page is live and the legal checklist is done ✍️</p>
+    <p class="note">Until then captions only use organic calls to action (follow, save, send, comment). Turning it on is <span class="mono">cta.service_enabled</span> in config.toml, and only after your OK.</p>
+    {% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="rv-h">
+    <div class="card-head"><h2 id="rv-h">Revenue</h2><span class="chip chip-muted"><span class="dot" aria-hidden="true"></span>not live</span></div>
+    <p class="kpi-value kpi-value-sm">✍️ Not live yet</p>
+    <p class="note">No price or revenue figure is shown until the offer exists. {% if orders %}{{ orders|length }} order{{ 's' if orders|length != 1 }} entered{% if demo %} (demo test data){% endif %}, {{ '%.2f'|format(orders_total) }} SAR in total.{% else %}No orders entered.{% endif %}</p>
+  </section>
+</div>
+
+<section class="card" aria-labelledby="lt-h">
+  <div class="card-head">
+    <h2 id="lt-h">Profile link taps</h2>
+    <p class="card-sub">Account insights, last 28 days</p>
+  </div>
+  {% if taps_chart %}
+  <div class="inline-stats">
+    <p><span class="kpi-label">Last 7 days</span> <span class="strip-value">{{ taps_7|int }}</span></p>
+    <p><span class="kpi-label">28 days</span> <span class="strip-value">{{ taps_total|int }}</span></p>
+  </div>
+  {{ taps_chart }}
+  <details class="tview">
+    <summary>Show as table</summary>
+    <div class="table-scroll">
+    <table class="tbl tbl-compact">
+      <caption class="sr-only">Profile link taps per day</caption>
+      <thead><tr><th scope="col">Day</th><th scope="col" class="num">Taps</th></tr></thead>
+      <tbody>{% for d, v in taps|reverse %}<tr><th scope="row" class="mono">{{ d }}</th><td class="num">{{ v|int }}</td></tr>{% endfor %}</tbody>
+    </table>
+    </div>
+  </details>
+  {% else %}
+  {{ m.empty("No link taps recorded", "Instagram reports taps on the profile link in the daily account check. They start to matter once the offer page is live.", "↗") }}
+  {% endif %}
+</section>
+
+<section class="card card-flush" aria-labelledby="or-h">
+  <div class="card-head card-pad"><h2 id="or-h">Orders</h2><p class="card-sub">Entered by hand, newest first</p></div>
+  {% if orders %}
+  <table class="tbl otable">
+    <caption class="sr-only">Orders entered manually</caption>
+    <thead><tr><th scope="col">Day</th><th scope="col">Item</th><th scope="col" class="num">Amount</th><th scope="col">Note</th></tr></thead>
+    <tbody>
+      {% for o in orders %}
+      <tr>
+        <th scope="row" class="mono">{{ o.day }}</th>
+        <td data-label="Item" dir="auto">{{ o.item or '–' }}{% if o.is_demo %} <span class="chip chip-sm chip-muted">demo</span>{% endif %}</td>
+        <td data-label="Amount" class="num">{{ '%.2f'|format(o.amount_sar) }} SAR</td>
+        <td data-label="Note" dir="auto">{{ o.note or '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="card-pad">{{ m.empty("No orders yet", "When the offer is live, orders you record by hand appear here with their amount in SAR.", "◇") }}</div>
+  {% endif %}
+</section>
+{% endblock %}

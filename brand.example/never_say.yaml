@@ -1,0 +1,31 @@
+# EXAMPLE never-say list (fictional creator). Literal phrases; any match in a caption or on-screen text is a hard fail.
+fact_traps:
+- فزنا بالهاكاثون
+- الفائز
+- المركز الأول
+- تدربت ثلاثة أشهر
+- حليت 200 تذكرة
+jobs_money:
+- وظيفة مضمونة
+- تتوظف خلال 30 يوم
+- راتبك يتضاعف
+- اكسب فلوس من AI
+- الـAI بياخذ وظيفتك
+- تابعني وبتتوظف
+engagement_bait:
+- اكتب نعم إذا
+- لايك إذا توافق
+- منشن 3 أصحاب
+- أرسله لـ10
+- صوّت بالتعليقات
+- تابع وإلا بيفوتك
+ads_mawthooq:
+- برعاية
+- رابط الأداة بالبايو
+- اشترك الحين
+- مرخص من موثوق
+tone: []
+banned_emoji:
+- 🚀
+- 💰
+- 🚨

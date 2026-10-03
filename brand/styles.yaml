@@ -1,0 +1,17 @@
+# Caption style presets for `reel rerender <id> --style preset=<name>` (or any key=value
+# from [captions] in config.toml). Brand: bg #141416, accent #B570FF, IBM Plex Sans Arabic.
+presets:
+  default: {}
+  big:
+    font_size: 104
+    max_chars: 18
+    max_words: 3
+  small:
+    font_size: 80
+  high:           # captions higher up (e.g. when the lower third has a desk/laptop)
+    margin_bottom: 760
+  low:            # still inside the safe zone (bottom 20% = 384 px is Instagram UI)
+    margin_bottom: 460
+  one_word:
+    max_words: 1
+    font_size: 110

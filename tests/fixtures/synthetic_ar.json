@@ -1,0 +1,48 @@
+{
+ "voice": "ar-SA-HamedNeural",
+ "duration": 39.33,
+ "timeline": [
+  {
+   "text": "طيب أول شي",
+   "role": "false_start",
+   "start": 0.5,
+   "end": 2.76
+  },
+  {
+   "text": "أول خطوة: سوّ CV واضح وحط رابط GitHub.",
+   "role": "keep",
+   "start": 3.96,
+   "end": 8.61
+  },
+  {
+   "text": "إمم، يعني",
+   "role": "filler",
+   "start": 9.51,
+   "end": 11.67
+  },
+  {
+   "text": "ثاني خطوة: افتح LinkedIn وحدّث بروفايلك كل أسبوع.",
+   "role": "keep",
+   "start": 12.97,
+   "end": 18.04
+  },
+  {
+   "text": "ثالث شي، جرب تبني مشروع، لا لحظة، خلني أعيدها.",
+   "role": "retake_bad",
+   "start": 19.64,
+   "end": 25.52
+  },
+  {
+   "text": "ثالث شي: ابن مشروع صغير بالذكاء الاصطناعي وحطه في GitHub.",
+   "role": "keep",
+   "start": 26.92,
+   "end": 33.06
+  },
+  {
+   "text": "احفظ المقطع، بتحتاجه وقت التقديم.",
+   "role": "keep",
+   "start": 33.86,
+   "end": 38.23
+  }
+ ]
+}

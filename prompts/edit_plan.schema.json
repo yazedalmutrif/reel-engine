@@ -1,0 +1,35 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["keep_segments", "drop_word_ids", "hook", "title_card", "pillar", "topic", "hook_type", "cover_word_id", "risk_flags", "caption_fixes", "notes"],
+  "properties": {
+    "keep_segments": {"type": "array", "items": {"type": "integer", "minimum": 0}, "minItems": 1, "description": "Segment numbers (S#) to keep, in order"},
+    "drop_word_ids": {"type": "array", "items": {"type": "integer", "minimum": 0}, "description": "Word ids (⟨n⟩) to remove inside kept segments: fillers, stutters, repeated words"},
+    "hook": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["spoken", "on_screen"],
+      "properties": {
+        "spoken": {"type": "string", "maxLength": 200, "description": "The spoken opening line as it stands after the cuts"},
+        "on_screen": {"type": "string", "minLength": 2, "maxLength": 60, "description": "Hook text card, max 7 words, Saudi dialect"}
+      }
+    },
+    "title_card": {"type": "string", "minLength": 2, "maxLength": 60, "description": "Cover title, max 7 words"},
+    "pillar": {"type": "string", "enum": ["ai_tools", "job_hunt", "build_proof", "cv_method"]},
+    "topic": {"type": "string", "maxLength": 80},
+    "hook_type": {"type": "string", "enum": ["problem", "bold_claim", "list_number", "story", "pov_before_after", "question"]},
+    "cover_word_id": {"type": ["integer", "null"], "minimum": 0},
+    "risk_flags": {"type": "array", "items": {"type": "string", "maxLength": 200}, "maxItems": 10},
+    "caption_fixes": {
+      "type": "array",
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["word_id", "text"],
+        "properties": {"word_id": {"type": "integer", "minimum": 0}, "text": {"type": "string", "minLength": 1, "maxLength": 40}}
+      }
+    },
+    "notes": {"type": "string", "maxLength": 500}
+  }
+}

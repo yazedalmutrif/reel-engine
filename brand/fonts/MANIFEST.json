@@ -1,0 +1,56 @@
+{
+  "IBMPlexSansArabic-Regular.ttf": {
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsansarabic/IBMPlexSansArabic-Regular.ttf",
+    "git_blob_sha1": "e779068718b9801b809605b2bf3067121cce524c",
+    "sha256": "6f611412270a132bbac838da9259d4c68569b4175f3b3b8fa3fa36a30b56dab9",
+    "license": "SIL Open Font License 1.1"
+  },
+  "IBMPlexSansArabic-Medium.ttf": {
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsansarabic/IBMPlexSansArabic-Medium.ttf",
+    "git_blob_sha1": "e82313893b5b5b6af3e7429f5b798666f1e0b097",
+    "sha256": "b8363ab9f733dfa4f8e96b8b2102c24b5cf4110fb96d1d3d9a9412f6fb49cf74",
+    "license": "SIL Open Font License 1.1"
+  },
+  "IBMPlexSansArabic-SemiBold.ttf": {
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsansarabic/IBMPlexSansArabic-SemiBold.ttf",
+    "git_blob_sha1": "f7a7fc87747a9ddabb3557d4a3f4140a7a1460b0",
+    "sha256": "597bd5502e5997be4414e4c9c88834b30ff3784250c84f20bce2b20e53ebd467",
+    "license": "SIL Open Font License 1.1"
+  },
+  "IBMPlexSansArabic-Bold.ttf": {
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsansarabic/IBMPlexSansArabic-Bold.ttf",
+    "git_blob_sha1": "211ff62d8d1778bff69a1b3a906b2ad1686564bc",
+    "sha256": "691e0c891a38637ae6bbdb69700f8042cb0724a137bee615068ffdb92244f61f",
+    "license": "SIL Open Font License 1.1"
+  },
+  "OFL-ibmplexsansarabic.txt": {
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsansarabic/OFL.txt",
+    "git_blob_sha1": "c35c4c618fab33da8695177b3a6cefe0810b7b28",
+    "sha256": "7e6b2818edbd8f6a01ae80641cc8f16a51080d08fb4e532be3a0b6f74adb07da",
+    "license": "SIL Open Font License 1.1"
+  },
+  "Inter[opsz,wght].ttf": {
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz%2Cwght%5D.ttf",
+    "git_blob_sha1": "047c92f6e2212473dc436020afed689527076d44",
+    "sha256": "29160a80ff49ddcab2c97711247e08b1fab27a484a329ce8b813d820dc559031",
+    "license": "SIL Open Font License 1.1"
+  },
+  "OFL-inter.txt": {
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/OFL.txt",
+    "git_blob_sha1": "21f6aff961064c2e429f570995e446bcdd555422",
+    "sha256": "5b9321a4298cfeb6b34354164a1c3afc3db114569984c502b9b35d988fd58c57",
+    "license": "SIL Open Font License 1.1"
+  },
+  "JetBrainsMono[wght].ttf": {
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf",
+    "git_blob_sha1": "aa310be8b717fe3774f9444dd89d5f4101cc6d10",
+    "sha256": "48715a42ec242c21e9f02692891e147d022299a52e48d5e413e1a942193ffeda",
+    "license": "SIL Open Font License 1.1"
+  },
+  "OFL-jetbrainsmono.txt": {
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/OFL.txt",
+    "git_blob_sha1": "821a3dac22aff15a1f1c9689a1d79c45bb58ca39",
+    "sha256": "b2fe5e8987594e9ffd1d2ca52a2f5d73eb8335243893c5d6254b5ad69269591d",
+    "license": "SIL Open Font License 1.1"
+  }
+}

@@ -1,0 +1,54 @@
+# Hand-maintained content/legal gate rules (NOT regenerated). Every rule is a HARD fail.
+# Patterns are Python regexes, matched case-insensitively on normalised text (see
+# reelengine/gates.py: diacritics removed, أإآ→ا, ى→ي, ة→ه, Arabic-Indic digits→0-9).
+# Single-quoted YAML: backslashes are literal. Sources: SPEC §2.7, brand copy §9,
+# research playbook locked rules R4, R6, R7, R8.
+engagement_bait:
+  - 'اكتب\s*["«'']?\S+["»'']?\s*(في|بال)?\s*(التعليقات|الكومنت|الكومنتات)?\s*(اذا|لو|عشان)\b'
+  - '(علق|علّق)\s*(ب|بـ|بكلمه)\s*\S+'
+  - 'منشن\s*\d+'
+  - '(منشن|ادعي|تاق)\s*(خويك|صاحبك|اصحابك|ربعك)\s*(اللي|الي)?\s*(لازم|يلزم)'
+  - '(ارسله|ارسلها|شاركه|شاركها)\s*(ل|لـ)\s*\d+'
+  - '(لايك|like)\s*(اذا|لو|if)\b'
+  - 'صوت\s*(بالتعليقات|في التعليقات)'
+  - '(شارك|شاركه|شاركها).{0,20}(الجزء الثاني|بارت 2|part 2)'
+  - '(تابع|تابعني)\s*(والا|وإلا)'
+  - '\bcomment\s+["'']?\w+["'']?\s+(if|below|for)\b'
+  - '\btag\s+(\d+|a friend|your friends?)\b'
+  - '\bshare\s+(this\s+)?(with\s+\d+|for part|to unlock)'
+  - '\blike\s+(if|for part)\b'
+guarantees:
+  - '(وظيفه|وظيفة)\s*(مضمونه|مضمونة)'
+  - '(تتوظف|بتتوظف|تلقي وظيفه)\s*(خلال|في|بـ?)\s*\d+\s*(يوم|ايام|اسبوع|شهر)'
+  - '(راتبك|دخلك)\s*(يتضاعف|بيتضاعف|يدبل)'
+  - '(اكسب|تكسب|بتكسب)\s*(فلوس|ارباح|دخل)'
+  - '(مضمون|ضمان)\s*100\s*%?'
+  - '\bguaranteed\s+(job|salary|income|results?)\b'
+  - '\b(get|land)\s+(a\s+)?job\s+in\s+\d+\s+days\b'
+  - '(تابعني|تابع)\s*و\s*(بتتوظف|تتوظف)'
+salary_as_fact:
+  - '(راتب|رواتب|الراتب)[^.؟!\n]{0,40}\b\d{1,3}(,\d{3})?\s*(الف|k|ريال|sar)\b'
+fear_claims:
+  - '(الذكاء الاصطناعي|ال ?ai|الـ ?ai)\s*(بياخذ|راح ياخذ|بيسرق|ياخذ)\s*(وظيفتك|وظايفكم|وظائفكم|شغلك)'
+ads_third_party:
+  - '(^|\s)#?(ad|ads|sponsored|advert|affiliate)\b'
+  - '\bpaid partnership\b'
+  - '#اعلان\b|\bاعلان مدفوع\b'
+  - '(برعايه|بالتعاون مع|شراكه مدفوعه)'
+  - '(كود|كوبون)\s*(خصم|الخصم)|\b(discount|promo|coupon)\s+code\b'
+  - '(رابط|لينك)\s*(الاداه|الاشتراك|الافلييت|affiliate)\s*(بالبايو|في البايو)'
+  - '(اشترك|سجل)\s*(الحين|الان)\s*(عبر|من|بـ?)\s*(رابطي|الرابط|كودي)'
+  - 'مرخص من موثوق'
+own_footage:   # locked rule R6: no reposts / watermarks
+  - '(مقطع منقول|\bمنقول\b|\brepost(ed)?\b|\bcredit to\b|\bvia @)'
+service_cta:   # hard only while cta.service_enabled = false
+  - 'خارطه وظائف (علي مقاس|مبنيه علي) cv'
+  - '(اراجع) ?cv ?ك'
+  - 'اكتب «?خارطه»? بالخاص'
+  - '(الرابط|التفاصيل) (بالبايو|في البايو)'
+  - '(اطلب|احجز) (خدمتي|خارطتك|مراجعتك)'
+  - '\b(dm|message) me for (a )?(cv|resume) review\b'
+  - '\blink in (my )?bio\b'
+  - '(بالخاص|الخاص|\bdm\b).{0,20}(اراجع|اسوي لك|اسويلك|اطلع لك)'
+  - 'اراجع (لك )?(سيرتك|السيره|السيره الذاتيه|cv)'
+  - '(كلمني|راسلني|تواصل معي).{0,25}(سيرتك|cv|خارطه|مراجعه)'
