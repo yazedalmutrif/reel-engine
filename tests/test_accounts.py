@@ -283,3 +283,20 @@ def test_cli_accounts(cfg, tmp_path, capsys, monkeypatch):
     assert rows[0]["username"] == "ref_one" and rows[0]["posts"] == 1
     assert cli_main(["accounts", "fetch"]) == 2  # discovery off -> clear refusal, no network
     assert cli_main(["accounts", "forget", "ref_one"]) == 0
+
+
+def test_early_v2_db_gets_first_seen_at(tmp_path, cfg):
+    import sqlite3
+
+    p = tmp_path / "old.sqlite"
+    c = db.connect(p)
+    c.executescript("DROP TABLE account_media; CREATE TABLE account_media (id INTEGER PRIMARY KEY AUTOINCREMENT, account_id INTEGER NOT NULL, "
+                    "media_key TEXT NOT NULL, permalink TEXT, posted_at TEXT, media_type TEXT, caption TEXT, likes INTEGER, comments INTEGER, "
+                    "views INTEGER, duration_s REAL, source TEXT NOT NULL, fetched_at TEXT NOT NULL, UNIQUE(account_id, media_key));")
+    c.execute("INSERT INTO accounts(username, pseudonym, role, source, added_at) VALUES('old','ACC_01','reference','manual','2026-10-01')")
+    c.execute("INSERT INTO account_media(account_id, media_key, source, fetched_at, caption) VALUES(1,'k','manual','2026-01-01T00:00:00+00:00','x')")
+    c.close()
+    c = db.connect(p)  # migrate adds the column and backfills it
+    assert c.execute("SELECT first_seen_at FROM account_media").fetchone()[0] == "2026-01-01T00:00:00+00:00"
+    assert ac.prune(c, cfg)["captions_wiped"] == 1
+    assert ac.import_rows(c, cfg, [{"permalink": "https://www.instagram.com/reel/NEWW1234/"}], default_username="old")["stored"] == 1

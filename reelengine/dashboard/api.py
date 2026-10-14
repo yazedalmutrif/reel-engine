@@ -195,9 +195,13 @@ class WriteApi:
             elif action == "forget":
                 if not acctmod.forget(conn, str(d.get("username") or "")):
                     raise ApiError(404, "not attached")
-                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")  # deleted rows must not linger in the WAL ...
-                conn.execute("VACUUM")  # ... or in free pages (secure_delete is on in forget)
                 res = {"ok": True}
+                try:
+                    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")  # deleted rows must not linger in the WAL ...
+                    conn.execute("VACUUM")  # ... or in free pages (secure_delete is on in forget)
+                except Exception as exc:  # noqa: BLE001 - a busy engine: the delete itself is committed
+                    log.warning("VACUUM after forget deferred: %s", exc)
+                    res["vacuum"] = "deferred"
             elif action == "import":
                 text = str(d.get("text") or "")
                 rows = acctmod.parse_csv(text) if d.get("format") == "csv" else acctmod.parse_paste(text)

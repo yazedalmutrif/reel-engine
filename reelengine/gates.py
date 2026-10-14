@@ -104,7 +104,11 @@ def load_occasion_rules(brand_dir: Path) -> dict:
         for k, v in (extra.get("groups") or {}).items():
             out["groups"].setdefault(k, v)
         ids = {r["id"] for r in out["rules"]}
-        out["rules"] += [r for r in (extra.get("rules") or []) if r.get("id") not in ids]
+        for r in extra.get("rules") or []:
+            if not (isinstance(r, dict) and r.get("id") and r.get("match") and r.get("reason")):
+                raise ValueError(f"{own}: every occasion rule needs id, match and reason")
+            if r["id"] not in ids:
+                out["rules"].append(r)
         out["filming_checklist"] += [c for c in (extra.get("filming_checklist") or []) if c not in out["filming_checklist"]]
     return out
 

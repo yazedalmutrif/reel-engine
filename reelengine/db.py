@@ -419,6 +419,11 @@ def migrate(conn: sqlite3.Connection) -> None:
     if ver < 2:
         conn.executescript(DDL_V2)
         conn.execute("PRAGMA user_version=2")
+    # a DB created by an early build of v2 lacks account_media.first_seen_at (the retention clock)
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(account_media)")]
+    if cols and "first_seen_at" not in cols:
+        conn.execute("ALTER TABLE account_media ADD COLUMN first_seen_at TEXT")
+        conn.execute("UPDATE account_media SET first_seen_at=fetched_at WHERE first_seen_at IS NULL")
 
 
 @contextmanager
