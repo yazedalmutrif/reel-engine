@@ -1,0 +1,321 @@
+# Saudi occasions calendar: the SEED (generic, not personal, so it lives in the public brand/ folder).
+# A brand pack can ship its own occasions.yaml (brand_dir wins over this file).
+#
+# The seed is copied into the engine's DB once (`reel calendar seed`, also on first start). After that the
+# DB is the source of truth: edits from the dashboard or `reel calendar edit` are never overwritten, and a
+# deleted seed day stays deleted (tombstone). Re-seeding only adds slugs the DB has never seen.
+#
+# rule:   gregorian = same Gregorian month/day every year
+#         hijri     = same Hijri month/day every year, converted with the Umm al-Qura calendar (hijridate,
+#                     pinned in requirements.txt). Religious dates are finally set by the Supreme Court's
+#                     moon-sighting announcement and can move by a day: always re-check before posting.
+#         once      = a single dated event (year required), e.g. a conference
+# category: national | religious | international | tech | career
+# official: true only for national days set by a Saudi royal order and for official public holidays (the Eids,
+#           Arafah). Religious seasons that are not a holiday (Ramadan's start), international and unofficial
+#           days are official: false.
+# Every seeded day has a source and the date it was checked (researched 2026-10-14). Items marked
+# "secondary source" were not confirmed on a primary government/organiser page: re-check before filming.
+occasions:
+  - slug: founding-day
+    name_ar: يوم التأسيس
+    name_en: Founding Day
+    rule: gregorian
+    month: 2
+    day: 22
+    category: national
+    official: true
+    angle: Saudi tech story then and now; national pride without commercial offers.
+    notes: Official holiday (royal order 24/6/1443H, Jan 2022). Secondary source; re-check the primary text on spa.gov.sa. Follow the national-symbols rules in the brief checklist.
+    source_url: https://www.akhbaar24.com/article/detail/585734
+    checked_on: 2026-10-14
+    keywords: [التاسيس, founding day]
+
+  - slug: flag-day
+    name_ar: يوم العلم
+    name_en: Flag Day
+    rule: gregorian
+    month: 3
+    day: 11
+    category: national
+    official: true
+    angle: Respectful national-pride reel; never put the flag on merchandise, ads or the floor.
+    notes: National occasion by royal order (2023); not a public holiday per several outlets (unverified against MHRSD for 2026).
+    source_url: https://gulfnews.com/world/gulf/saudi/saudi-arabia-to-mark-flag-day-annually-on-march-11-1.1677666831363
+    checked_on: 2026-10-14
+    keywords: [يوم العلم, flag day]
+
+  - slug: national-day
+    name_ar: اليوم الوطني
+    name_en: Saudi National Day
+    rule: gregorian
+    month: 9
+    day: 23
+    category: national
+    official: true
+    angle: Vision 2030 tech careers and what young Saudis are building; no "National Day offer" CTA.
+    notes: Official holiday. Secondary source (holiday list); primary MHRSD notice not retrieved.
+    source_url: https://calendarific.com/holidays/2026/sa
+    checked_on: 2026-10-14
+    keywords: [اليوم الوطني, national day, اليوم الوطني السعودي]
+
+  - slug: ramadan-start
+    name_ar: بداية رمضان
+    name_en: Start of Ramadan
+    rule: hijri
+    month: 9
+    day: 1
+    category: religious
+    official: false
+    angle: Productivity and study routines in Ramadan; respectful tone, no jokes about worship.
+    notes: Umm al-Qura date (computed); the start is announced after moon sighting and can move by a day.
+    source_url: https://blog.wego.com/ramadan-2027/
+    checked_on: 2026-10-14
+    keywords: [رمضان, ramadan]
+
+  - slug: eid-al-fitr
+    name_ar: عيد الفطر
+    name_en: Eid al-Fitr
+    rule: hijri
+    month: 10
+    day: 1
+    category: religious
+    official: true
+    angle: Short Eid greeting or a light "after Eid, back to the job hunt" plan.
+    notes: Official holiday; date set by moon sighting (29 or 30 Ramadan), Umm al-Qura is the planning estimate.
+    source_url: https://blog.wego.com/ramadan-2027/
+    checked_on: 2026-10-14
+    keywords: [عيد الفطر, eid al-fitr, eid]
+
+  - slug: arafah-day
+    name_ar: يوم عرفة
+    name_en: Day of Arafah
+    rule: hijri
+    month: 12
+    day: 9
+    category: religious
+    official: true
+    angle: Usually no work content; a quiet day. Plan the Eid al-Adha greeting instead.
+    notes: Part of the Eid al-Adha holiday period. Umm al-Qura estimate; final date by announcement.
+    source_url: https://calendarific.com/holidays/2026/sa
+    checked_on: 2026-10-14
+    keywords: [عرفه, arafah]
+
+  - slug: eid-al-adha
+    name_ar: عيد الأضحى
+    name_en: Eid al-Adha
+    rule: hijri
+    month: 12
+    day: 10
+    category: religious
+    official: true
+    angle: Eid greeting; respectful, no product tie-ins.
+    notes: Official holiday. Umm al-Qura estimate; final date by announcement.
+    source_url: https://calendarific.com/holidays/2026/sa
+    checked_on: 2026-10-14
+    keywords: [عيد الاضحي, eid al-adha]
+
+  - slug: teachers-day
+    name_ar: اليوم العالمي للمعلم
+    name_en: World Teachers' Day
+    rule: gregorian
+    month: 10
+    day: 5
+    category: international
+    official: false
+    angle: Thank a teacher or mentor who shaped your path into tech; tools teachers can use.
+    notes: UNESCO day, not a Saudi holiday; widely observed by the Ministry of Education (school events, 2021-2024 coverage).
+    source_url: https://www.un.org/en/observances/list-days-weeks
+    checked_on: 2026-10-14
+    keywords: [يوم المعلم, المعلم, teachers day]
+
+  - slug: bosses-day
+    name_ar: يوم المدير العالمي
+    name_en: Boss's Day (international, unofficial)
+    rule: gregorian
+    month: 10
+    day: 16
+    category: international
+    official: false
+    angle: Light reel on what fresh grads wish managers knew, or how to talk to your manager about AI tools.
+    notes: Unofficial and informal (US "National Boss's Day"; Arabic media call it يوم المدير العالمي). Not a holiday anywhere found. When it falls on a weekend it is often marked on the nearest workday.
+    source_url: https://www.alkhaleej.ae/2025-10-16/بمناسبة-يوم-المدير-تزايد-الثقة-في-قدرات-المرأة-على-قيادة-بيئة-العمل-6131606/محطات/منوعات
+    checked_on: 2026-10-14
+    keywords: [يوم المدير, boss day, bosses day, boss's day]
+
+  - slug: education-day
+    name_ar: اليوم الدولي للتعليم
+    name_en: International Day of Education
+    rule: gregorian
+    month: 1
+    day: 24
+    category: international
+    official: false
+    angle: Free ways to learn AI skills; what to learn after graduation.
+    notes: UN observance.
+    source_url: https://www.un.org/en/observances/list-days-weeks
+    checked_on: 2026-10-14
+    keywords: [يوم التعليم, education day]
+
+  - slug: womens-day
+    name_ar: اليوم العالمي للمرأة
+    name_en: International Women's Day
+    rule: gregorian
+    month: 3
+    day: 8
+    category: international
+    official: false
+    angle: Saudi women in tech (public, verified examples only, with full titles).
+    notes: UN observance.
+    source_url: https://www.un.org/en/observances/list-days-weeks
+    checked_on: 2026-10-14
+    keywords: [يوم المراه, women's day, womens day]
+
+  - slug: youth-skills-day
+    name_ar: اليوم العالمي لمهارات الشباب
+    name_en: World Youth Skills Day
+    rule: gregorian
+    month: 7
+    day: 15
+    category: career
+    official: false
+    angle: The 3 skills employers ask fresh grads for, and how to show them on a CV.
+    notes: UN observance.
+    source_url: https://www.un.org/en/observances/list-days-weeks
+    checked_on: 2026-10-14
+    keywords: [مهارات الشباب, youth skills]
+
+  - slug: youth-day
+    name_ar: اليوم الدولي للشباب
+    name_en: International Youth Day
+    rule: gregorian
+    month: 8
+    day: 12
+    category: international
+    official: false
+    angle: Advice for students starting their tech path.
+    notes: UN observance.
+    source_url: https://www.un.org/en/observances/list-days-weeks
+    checked_on: 2026-10-14
+    keywords: [يوم الشباب, youth day]
+
+  - slug: mental-health-day
+    name_ar: اليوم العالمي للصحة النفسية
+    name_en: World Mental Health Day
+    rule: gregorian
+    month: 10
+    day: 10
+    category: international
+    official: false
+    angle: Job-hunt burnout and rejection; general tips only, no medical claims.
+    notes: WHO-backed observance (UN list).
+    source_url: https://www.un.org/en/observances/list-days-weeks
+    checked_on: 2026-10-14
+    keywords: [الصحه النفسيه, mental health day]
+
+  - slug: arabic-language-day
+    name_ar: اليوم العالمي للغة العربية
+    name_en: World Arabic Language Day
+    rule: gregorian
+    month: 12
+    day: 18
+    category: international
+    official: false
+    angle: AI tools that handle Arabic well (and where they still fail).
+    notes: UN observance; a strong fit for Arabic content.
+    source_url: https://www.un.org/en/observances/list-days-weeks
+    checked_on: 2026-10-14
+    keywords: [اللغه العربيه, arabic language day]
+
+  - slug: safer-internet-day-2027
+    name_ar: اليوم العالمي للإنترنت الآمن
+    name_en: Safer Internet Day 2027
+    rule: once
+    year: 2027
+    month: 2
+    day: 9
+    category: tech
+    official: false
+    angle: Protect your accounts (2FA, password manager) before you apply for jobs online.
+    notes: Second Tuesday of February each year (not on the UN list); add next year's date by hand.
+    source_url: https://better-internet-for-kids.europa.eu/en/events/safer-internet-day-sid-2027
+    checked_on: 2026-10-14
+    keywords: [الانترنت الامن, safer internet]
+
+  - slug: programmers-day-2027
+    name_ar: يوم المبرمج
+    name_en: Programmers' Day 2027
+    rule: once
+    year: 2027
+    month: 9
+    day: 13
+    category: tech
+    official: false
+    angle: A day in the life of a junior developer; tools that save time.
+    notes: The 256th day of the year (13 Sep, or 12 Sep in leap years). Informal; no Saudi observance found.
+    source_url: https://en.wikipedia.org/wiki/Programmer%27s_Day
+    checked_on: 2026-10-14
+    keywords: [يوم المبرمج, programmers day]
+
+  - slug: fii10-2026
+    name_ar: مبادرة مستقبل الاستثمار (FII10)
+    name_en: Future Investment Initiative 10 (Riyadh)
+    rule: once
+    year: 2026
+    month: 10
+    day: 26
+    duration_days: 4
+    category: tech
+    official: false
+    angle: AI and jobs headlines from FII explained simply (link the source in the brief).
+    notes: 26-29 Oct 2026, King Abdulaziz International Conference Center. Secondary sources; official FII site not fetched.
+    source_url: https://en.sharikatmubasher.com/media-hub/news/21562118/riyadh-to-host-10th-edition-of-future-investment-initiative-next-october
+    checked_on: 2026-10-14
+    keywords: [fii, مستقبل الاستثمار]
+
+  - slug: black-hat-mea-2026
+    name_ar: بلاك هات الشرق الأوسط وأفريقيا
+    name_en: Black Hat MEA 2026 (Riyadh)
+    rule: once
+    year: 2026
+    month: 12
+    day: 1
+    duration_days: 3
+    category: tech
+    official: false
+    angle: Cybersecurity careers for fresh grads; what to learn first.
+    notes: 1-3 Dec 2026, Riyadh Exhibition and Convention Center, Malham (official site).
+    source_url: https://blackhatmea.com/about-us
+    checked_on: 2026-10-14
+    keywords: [black hat, بلاك هات]
+
+  - slug: leap-2027
+    name_ar: مؤتمر ليب 2027
+    name_en: LEAP 2027 (Riyadh)
+    rule: once
+    year: 2027
+    month: 4
+    day: 12
+    duration_days: 4
+    category: tech
+    official: false
+    angle: What to look for at LEAP as a student; AI launches worth knowing.
+    notes: 12-15 Apr 2027, RECC Malham. Secondary source only (the official site was not reachable); re-check on onegiantleap.com.
+    source_url: https://www.beri.net/events/leap-2027
+    checked_on: 2026-10-14
+    keywords: [leap 2027, leap conference, مؤتمر ليب, ليب 2027]
+
+  - slug: graduation-season
+    name_ar: موسم التخرج
+    name_en: Graduation season (approximate)
+    rule: gregorian
+    month: 4
+    day: 20
+    duration_days: 40
+    category: career
+    official: false
+    angle: First steps after graduation; CV and LinkedIn checklist for new grads.
+    notes: Approximate. Saudi universities set their own ceremonies, mostly April-May (e.g. PSAU 23 and 26 Apr 2026), some in February.
+    source_url: https://psau.edu.sa/en/advertisements/17th-graduation-ceremony
+    checked_on: 2026-10-14
+    keywords: [التخرج, خريج, graduation]

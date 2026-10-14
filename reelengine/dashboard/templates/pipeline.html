@@ -6,6 +6,71 @@
   <p class="lede">Every clip's path from the OneDrive inbox to Instagram. Click a card for the full reel.</p>
 </div>
 
+<section class="card upl" id="upload" aria-labelledby="upl-h">
+  <div class="card-head">
+    <h2 id="upl-h">Upload a clip</h2>
+    <p class="card-sub">Same path as the OneDrive inbox: intake, then every QA gate.</p>
+  </div>
+  <div class="upl-body">
+    <div>
+      <form data-upload-form data-write-only novalidate>
+        <label class="upl-drop" for="upl-file" data-upload-drop>
+          <span class="upl-drop-icon" aria-hidden="true">⇡</span>
+          <span class="upl-drop-title">Drop a video here</span>
+          <span class="upl-drop-sub">or</span>
+          <span class="btn btn-sm" aria-hidden="true">Choose a file</span>
+          <span class="upl-drop-sub" id="upl-accept">{{ upload_exts }} · up to {{ upload_max_mb }} MB</span>
+          <input class="sr-only" id="upl-file" name="file" type="file" accept="{{ upload_exts|replace(' ', '') }},video/mp4,video/quicktime,video/x-m4v" aria-describedby="upl-accept upl-err" data-upload-input data-max-mb="{{ upload_max_mb }}">
+        </label>
+        <p class="field-error" id="upl-err" data-upload-error></p>
+      </form>
+      <div class="upl-drop is-disabled" aria-disabled="true" data-readonly-note>
+        <span class="upl-drop-icon" aria-hidden="true">⇡</span>
+        <span class="upl-drop-title">Uploads are off here</span>
+        <span class="upl-drop-sub">{% if demo %}This is the demo dashboard: nothing can be uploaded.{% else %}This page is read-only. Open it with <code>reel dashboard --open</code>, or drop the clip into the OneDrive inbox; it is picked up within two 15-minute ticks.{% endif %}</span>
+      </div>
+      <div class="upl-now" data-upload-now aria-live="polite" hidden>
+        <div class="upl-now-top">
+          <span class="upl-file" data-upload-name></span>
+          <span class="chip chip-sm upl-st-uploading" data-upload-state><span class="dot" aria-hidden="true"></span><span data-upload-state-text>Uploading</span></span>
+        </div>
+        <progress class="upl-bar" max="100" value="0" aria-label="Upload progress" data-upload-progress></progress>
+        <div class="upl-now-top">
+          <span class="upl-pct" data-upload-pct></span>
+          <button type="button" class="btn btn-sm btn-ghost" data-upload-cancel>Cancel</button>
+        </div>
+      </div>
+    </div>
+    <ul class="upl-limits">
+      <li><span class="sev-icon sev-info" aria-hidden="true">i</span><span>Up to {{ upload_max_mb }} MB per clip · {{ upload_exts }}</span></li>
+      <li><span class="sev-icon sev-good" aria-hidden="true">✓</span><span>Goes through every QA gate, like a clip from the inbox</span></li>
+      <li><span class="sev-icon sev-good" aria-hidden="true">✓</span><span>Nothing is posted by uploading; dry-run stays on</span></li>
+      <li><span class="sev-icon sev-info" aria-hidden="true">i</span><span>A clip that was already uploaded is spotted and not processed twice</span></li>
+    </ul>
+  </div>
+  <h3 class="sub-h">Recent uploads</h3>
+  {% if uploads %}
+  <ul class="upl-list" data-upload-recent>
+    {% for u in uploads %}
+    <li class="upl-item">
+      <div class="upl-item-main"><span class="upl-file">{{ u.name }}</span><span class="upl-item-meta">{{ u.size|bytes }} · <time datetime="{{ u.at }}">{{ u.at[:16]|replace('T', ' ') }} UTC</time></span></div>
+      <div class="upl-item-state">
+        {% if u.state == 'duplicate' %}<span class="chip chip-sm upl-st-duplicate"><span class="dot" aria-hidden="true"></span>Duplicate</span>
+        {% elif u.state == 'waiting' %}<span class="chip chip-sm upl-st-queued"><span class="dot" aria-hidden="true"></span>Queued for intake</span>
+        {% elif u.state == 'taken' %}<span class="chip chip-sm upl-st-checking"><span class="dot" aria-hidden="true"></span>Taken by intake</span>
+        {% else %}<a href="{{ root }}reels/{{ u.reel }}.html" class="mono">Reel #{{ u.reel }}</a>{{ m.state(u.state) }}{% endif %}
+      </div>
+      {% if u.state == 'duplicate' %}<p class="upl-item-note">Same video as {% if u.reel %}<a href="{{ root }}reels/{{ u.reel }}.html">reel #{{ u.reel }}</a>{% else %}an earlier upload{% endif %}; not processed again.</p>
+      {% elif u.state == 'waiting' %}<p class="upl-item-note">Picked up within two 15-minute ticks (the size must stay stable).</p>
+      {% elif u.held_reason %}<p class="upl-item-note" dir="auto">{{ u.held_reason }}</p>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="lane-empty" data-upload-recent>No uploads yet. Clips you upload here show their reel and its state.</p>
+  {% endif %}
+</section>
+
 {% if not reel_count %}
 <section class="card">
   {{ m.empty("No clips yet", "Film a clip and drop it in OneDrive › Reel Inbox. It is picked up within two 15-minute ticks and appears here as New.", "⇣") }}

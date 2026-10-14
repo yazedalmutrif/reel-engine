@@ -1,7 +1,8 @@
-"""Local, read-only web server for the dashboard (spec §8, §9).
+"""Local web server for the dashboard (spec §8, §9).
 
 - Binds loopback only (127.0.0.1 / ::1 / localhost); any other host is refused.
-- GET and HEAD only; every other method gets 405.
+- GET and HEAD only, except POST to /api/* when a WriteApi is attached (dashboard/api.py:
+  same-origin + CSRF token; uploads, calendar and account edits). Every other method gets 405.
 - Serves the built site, plus /media/<name>.mp4 (data/out) and /thumbs/<name>.png
   (data/thumbs), each through a strict filename regex: no percent-encoding, no dots
   in directory names, no traversal, no other directories.
@@ -15,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import http.server
+import json
 import ipaddress
 import re
 import socket
@@ -53,6 +55,7 @@ SITE_PATH = re.compile(r"^/(?:[A-Za-z0-9_-]+/){0,3}[A-Za-z0-9_-][A-Za-z0-9_.-]{0
 MEDIA_PATH = re.compile(r"^/media/([A-Za-z0-9_-]{1,64}\.mp4)$")
 THUMB_PATH = re.compile(r"^/thumbs/([A-Za-z0-9_-]{1,64}\.png)$")
 RANGE = re.compile(r"^bytes=(\d*)-(\d*)$")
+API_PATH = re.compile(r"^/api/[a-z]{1,20}$")
 LOOPBACK_NAMES = ("localhost",)
 
 
@@ -74,6 +77,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
     site_dir: Path = Path(".")
     media_root: Path = Path(".")
     quiet: bool = True
+    api = None  # dashboard.api.WriteApi when writes are on
 
     def version_string(self) -> str:
         return self.server_version
@@ -97,7 +101,8 @@ class _Handler(http.server.BaseHTTPRequestHandler):
     def _not_allowed(self) -> None:
         self.close_connection = True  # the request body (if any) is never read
         self.send_response(405)
-        self.send_header("Allow", "GET, HEAD")
+        raw = self.path.split("?", 1)[0]
+        self.send_header("Allow", "GET, HEAD, POST" if self.api is not None and API_PATH.match(raw) else "GET, HEAD")
         self.send_header("Content-Type", "text/plain; charset=utf-8")
         self.send_header("Content-Length", "0")
         self.send_header("Connection", "close")
@@ -108,6 +113,40 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 
     def do_HEAD(self) -> None:  # noqa: N802
         self._serve(head=True)
+
+    def do_POST(self) -> None:  # noqa: N802
+        raw = self.path.split("?", 1)[0]
+        if self.api is None or not API_PATH.match(raw):
+            self._not_allowed()
+            return
+        if not self._host_ok():
+            self.close_connection = True
+            self._json(403, {"error": "forbidden host"})
+            return
+        from .api import ApiError
+
+        try:
+            status, body = self.api.post(self, raw)
+        except ApiError as exc:
+            self.close_connection = True  # an unread request body must not be parsed as a new request
+            status, body = exc.status, {"error": str(exc)}
+        except Exception as exc:  # noqa: BLE001
+            self.close_connection = True
+            from ..log import redact
+
+            status, body = 500, {"error": f"server error: {redact(str(exc))[:200]}"}
+        self._json(status, body)
+
+    def _json(self, status: int, body: dict, head: bool = False) -> None:
+        data = json.dumps(body, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        if self.close_connection:
+            self.send_header("Connection", "close")
+        self.end_headers()
+        if not head:
+            self.wfile.write(data)
 
     # ------------------------------------------------------------------ routing
     def _host_ok(self) -> bool:
@@ -126,6 +165,15 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         raw = self.path.split("?", 1)[0].split("#", 1)[0]
         if raw == "/":
             raw = "/index.html"
+        if self.api is not None and API_PATH.match(raw):
+            from .api import ApiError
+
+            try:
+                status, body = self.api.get(raw)
+            except ApiError as exc:
+                status, body = exc.status, {"error": str(exc)}
+            self._json(status, body, head=head)
+            return
         m = MEDIA_PATH.match(raw)
         if m:
             self._file(self.media_root / "out", m.group(1), head, allow_range=True)
@@ -212,8 +260,10 @@ class DashboardServer6(DashboardServer):
     address_family = socket.AF_INET6
 
 
-def make_server(cfg, site_dir: Path, port: int | None = None, media_root: Path | None = None, quiet: bool = True) -> DashboardServer:
-    """Create (bind) the server without starting it. Raises ValueError for a non-loopback host."""
+def make_server(cfg, site_dir: Path, port: int | None = None, media_root: Path | None = None, quiet: bool = True,
+                api=None) -> DashboardServer:
+    """Create (bind) the server without starting it. Raises ValueError for a non-loopback host.
+    `api` (a dashboard.api.WriteApi) turns on the POST /api/* routes; None = read-only."""
     host = str(cfg["dashboard"]["host"])
     if not is_loopback(host):
         raise ValueError(f"dashboard host {host!r} is not loopback; the dashboard only binds 127.0.0.1 / ::1")
@@ -223,18 +273,37 @@ def make_server(cfg, site_dir: Path, port: int | None = None, media_root: Path |
     handler = type(
         "DashboardHandler",
         (_Handler,),
-        {"site_dir": Path(site_dir).resolve(), "media_root": Path(media_root or cfg.data_dir).resolve(), "quiet": quiet},
+        {"site_dir": Path(site_dir).resolve(), "media_root": Path(media_root or cfg.data_dir).resolve(), "quiet": quiet, "api": api},
     )
     cls = DashboardServer6 if ":" in host else DashboardServer
     return cls((host.strip("[]"), port), handler)
 
 
-def serve(cfg, site_dir: Path, port: int | None = None, open_browser: bool = False, media_root: Path | None = None) -> None:
+def make_api(cfg, db_path: Path, site_dir: Path, demo: bool = False):
+    """The write API for `serve`, or None when [dashboard] allow_writes = false."""
+    if not cfg.get("dashboard.allow_writes", True):
+        return None
+    from .. import db
+    from .api import WriteApi
+    from .build import build_dashboard
+
+    def rebuild() -> None:
+        conn = db.connect(db_path)
+        try:
+            build_dashboard(cfg, conn, out_dir=site_dir, demo=demo)
+        finally:
+            conn.close()
+
+    return WriteApi(cfg, db_path, site_dir, demo=demo, rebuild=rebuild)
+
+
+def serve(cfg, site_dir: Path, port: int | None = None, open_browser: bool = False, media_root: Path | None = None, api=None) -> None:
     """Serve the dashboard until Ctrl+C."""
-    httpd = make_server(cfg, site_dir, port=port, media_root=media_root)
+    httpd = make_server(cfg, site_dir, port=port, media_root=media_root, api=api)
     host, prt = httpd.server_address[:2]
     url = f"http://{'[' + host + ']' if ':' in host else host}:{prt}/"
-    print(f"Reel Engine dashboard on {url}  (serving {Path(site_dir)}; Ctrl+C to stop)", flush=True)
+    mode = "uploads + edits on (CSRF-protected)" if api is not None else "read-only"
+    print(f"Reel Engine dashboard on {url}  (serving {Path(site_dir)}; {mode}; Ctrl+C to stop)", flush=True)
     if open_browser:
         threading.Timer(0.4, webbrowser.open, args=(url,)).start()
     try:
@@ -267,6 +336,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-build", action="store_true", help="serve the existing site without rebuilding it")
     ap.add_argument("--port", type=int, default=None, help="port (default: [dashboard] port in config.toml)")
     ap.add_argument("--open", action="store_true", help="open the dashboard in the default browser")
+    ap.add_argument("--read-only", action="store_true", help="no uploads or edits (no POST routes at all)")
     args = ap.parse_args(argv)
 
     from .. import db
@@ -282,6 +352,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.reseed or not db_path.exists() or _demo_stale(db_path):
             seed_demo(db_path, cfg, demo_dir / "thumbs")
         site = cfg.data_dir / "dashboard-demo"
+        api_db = db_path
         if not args.no_build or not site.exists():
             conn = db.connect(db_path)
             build_dashboard(cfg, conn, demo=True)
@@ -290,11 +361,13 @@ def main(argv: list[str] | None = None) -> int:
     else:
         site = cfg.data_dir / "dashboard"
         media = cfg.data_dir
+        api_db = cfg.db_path
         if not args.no_build or not site.exists():
             conn = db.connect(cfg.db_path if cfg.db_path.exists() else ":memory:")
             build_dashboard(cfg, conn)
             conn.close()
-    serve(cfg, site, port=args.port, open_browser=args.open, media_root=media)
+    api = None if args.read_only else make_api(cfg, api_db, site, demo=args.demo)
+    serve(cfg, site, port=args.port, open_browser=args.open, media_root=media, api=api)
     return 0
 
 

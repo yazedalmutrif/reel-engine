@@ -120,8 +120,10 @@ class _Constraints:
         return all(abs(utc - o) >= self.gap for o in self.occupied)
 
 
-def _earliest_valid(arm: Mapping, playbook: Mapping, cfg: Config, now_utc: datetime, rules: _Constraints) -> tuple[datetime, datetime] | None:
-    """(local, utc) of the arm's first valid occurrence inside the horizon, or None."""
+def _earliest_valid(arm: Mapping, playbook: Mapping, cfg: Config, now_utc: datetime, rules: _Constraints,
+                    not_before: datetime | None = None) -> tuple[datetime, datetime] | None:
+    """(local, utc) of the arm's first valid occurrence inside the horizon (and not before
+    `not_before`, if given), or None."""
     t = _hhmm(str(arm["time"]))
     first_day = now_utc.astimezone(cfg.tz).date()
     for offset in range(HORIZON_DAYS + 1):
@@ -132,6 +134,8 @@ def _earliest_valid(arm: Mapping, playbook: Mapping, cfg: Config, now_utc: datet
         utc = local.astimezone(timezone.utc)
         if utc > rules.horizon:
             return None
+        if not_before is not None and utc < not_before:
+            continue
         if rules.ok(local, utc):
             return local, utc
     return None
@@ -144,11 +148,16 @@ def next_slot(
     now: datetime | None = None,
     rng: Any = None,
     reel_id: int | None = None,
+    window: Mapping | None = None,
 ) -> dict:
     """Pick the next posting time and log the decision (dimension 'slot').
 
-    Returns {"when_utc", "when_local", "arm", "explore"}. Raises NoSlotAvailable when no arm has
-    a valid occurrence inside the 14-day horizon."""
+    `window` ({"slug", "start_utc", "end_utc"}, from occasions.window_for_reel) asks for a slot
+    inside an occasion's posting window; every normal constraint still applies, and if no arm
+    fits the window the normal choice is made (logged as occasion_missed).
+
+    Returns {"when_utc", "when_local", "arm", "explore"[, "occasion"]}. Raises NoSlotAvailable when
+    no arm has a valid occurrence inside the 14-day horizon."""
     now_utc = _utc(now) or db.utcnow()
     rules = _Constraints(cfg, now_utc, _occupied(conn, reel_id))
     plan = learner.arm_order(conn, cfg, playbook, "slot", rng=rng, reel_id=reel_id)
@@ -156,18 +165,35 @@ def next_slot(
     earliest = {a: occ for a in plan["order"] if (occ := _earliest_valid(arms[a], playbook, cfg, now_utc, rules))}
     if not earliest:
         raise NoSlotAvailable(f"no valid slot in the next {HORIZON_DAYS} days (queue full or constraints conflict)")
-    cutoff = now_utc + timedelta(days=PREFERRED_WITHIN_DAYS)
-    chosen = next((a for a in plan["order"] if a in earliest and earliest[a][1] <= cutoff), None)
-    fallback = chosen is None
-    if fallback:
-        chosen = min(earliest, key=lambda a: (earliest[a][1], plan["order"].index(a)))
-    local, utc = earliest[chosen]
+    occasion = None
+    extra: dict[str, Any] = {}
+    if window:
+        w0, w1 = _utc(window["start_utc"]), _utc(window["end_utc"])
+        in_win = {a: occ for a in plan["order"]
+                  if (occ := _earliest_valid(arms[a], playbook, cfg, now_utc, rules, not_before=w0)) and occ[1] <= w1}
+        if in_win:
+            chosen = next(a for a in plan["order"] if a in in_win)
+            local, utc = in_win[chosen]
+            occasion, fallback = window["slug"], False
+            extra["occasion"] = occasion
+        else:
+            extra["occasion_missed"] = window["slug"]
+    if occasion is None:
+        cutoff = now_utc + timedelta(days=PREFERRED_WITHIN_DAYS)
+        chosen = next((a for a in plan["order"] if a in earliest and earliest[a][1] <= cutoff), None)
+        fallback = chosen is None
+        if fallback:
+            chosen = min(earliest, key=lambda a: (earliest[a][1], plan["order"].index(a)))
+        local, utc = earliest[chosen]
     learner.log_decision(
         conn, reel_id, "slot", chosen, plan["explore"],
-        learner.decision_detail(plan, "scheduler", order=plan["order"], when_utc=_iso(utc), fallback=fallback),
+        learner.decision_detail(plan, "scheduler", order=plan["order"], when_utc=_iso(utc), fallback=fallback, **extra),
     )
     _log.info("reel %s -> %s at %s%s", reel_id, chosen, local.isoformat(), " (explore)" if plan["explore"] else "")
-    return {"when_utc": utc, "when_local": local, "arm": chosen, "explore": plan["explore"]}
+    out = {"when_utc": utc, "when_local": local, "arm": chosen, "explore": plan["explore"]}
+    if occasion:
+        out["occasion"] = occasion
+    return out
 
 
 def schedule_reel(conn: sqlite3.Connection, cfg: Config, reel_id: int, now: datetime | None = None, rng: Any = None) -> dict:
@@ -180,16 +206,22 @@ def schedule_reel(conn: sqlite3.Connection, cfg: Config, reel_id: int, now: date
             raise db.TransitionError(f"reel {reel_id} not found")
         if row["state"] != "qa_passed":
             raise db.TransitionError(f"reel {reel_id} is {row['state']}, expected qa_passed")
-        slot = next_slot(conn, cfg, playbook, now=now, rng=rng, reel_id=reel_id)
+        from . import occasions
+
+        window = occasions.window_for_reel(conn, cfg, row, now=now)
+        slot = next_slot(conn, cfg, playbook, now=now, rng=rng, reel_id=reel_id, window=window)
         when_iso = _iso(slot["when_utc"])
         fresh = learner.extract_features({**dict(row), "scheduled_at": when_iso, "slot_arm": slot["arm"]}, playbook, cfg)
         features = learner.json_dict(row["features_json"])
         features.update({k: v for k, v in fresh.items() if v is not None})
         local = slot["when_local"]
         features.update(slot=slot["arm"], weekday=learner.WEEKDAY_ABBR[local.weekday()], hour=local.hour)
+        if slot.get("occasion"):
+            features["occasion"] = slot["occasion"]
         db.transition(
             conn, reel_id, "scheduled",
-            detail=f"slot {slot['arm']} at {local.isoformat()}" + (" (explore)" if slot["explore"] else ""),
+            detail=f"slot {slot['arm']} at {local.isoformat()}" + (" (explore)" if slot["explore"] else "")
+            + (f" (occasion: {slot['occasion']})" if slot.get("occasion") else ""),
             expect_from="qa_passed", scheduled_at=when_iso, slot_arm=slot["arm"], features_json=db.jdump(features),
         )
     return {"reel_id": reel_id, "scheduled_at": when_iso, **slot}

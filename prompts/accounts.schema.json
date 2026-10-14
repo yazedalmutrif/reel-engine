@@ -1,0 +1,55 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["accounts", "ideas", "summary"],
+  "properties": {
+    "accounts": {
+      "type": "array",
+      "maxItems": 21,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["account", "topics", "hook_types", "formats", "typical_length", "best_times", "performing", "summary", "confidence"],
+        "properties": {
+          "account": {"type": "string", "pattern": "^(ACC_[0-9]{2,3}|OWN)$"},
+          "topics": {"type": "array", "items": {"type": "string", "maxLength": 80}, "maxItems": 5},
+          "hook_types": {"type": "array", "items": {"enum": ["problem", "bold_claim", "list_number", "story", "pov_before_after", "question", "other"]}, "maxItems": 7},
+          "formats": {"type": "array", "items": {"type": "string", "maxLength": 60}, "maxItems": 5},
+          "typical_length": {"type": "string", "maxLength": 60},
+          "best_times": {"type": "array", "items": {"type": "string", "maxLength": 40}, "maxItems": 4},
+          "performing": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["post", "why"],
+              "properties": {
+                "post": {"type": "string", "pattern": "^(ACC_[0-9]{2,3}|OWN)-P[0-9]{1,3}$"},
+                "why": {"type": "string", "maxLength": 200}
+              }
+            }
+          },
+          "summary": {"type": "string", "maxLength": 300},
+          "confidence": {"enum": ["low", "medium", "high"]}
+        }
+      }
+    },
+    "ideas": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["idea", "hook_type", "why"],
+        "properties": {
+          "idea": {"type": "string", "maxLength": 240},
+          "hook_type": {"enum": ["problem", "bold_claim", "list_number", "story", "pov_before_after", "question"]},
+          "why": {"type": "string", "maxLength": 240}
+        }
+      }
+    },
+    "summary": {"type": "string", "maxLength": 500}
+  }
+}

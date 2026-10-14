@@ -159,7 +159,11 @@ def critique(cfg, conn, brand: Brand, plan: dict, out_words: list[dict], caption
 def evaluate(cfg, conn, brand: Brand, *, out: Path, plan: dict, out_words: list[dict], caption: dict, render_info: dict, reel_id: int | None, run_critique: bool = True) -> dict:
     """Full QA. Returns qa_json (see db.py) with passed + hard_fails."""
     checks, measures = technical_checks(cfg, out, render_info, out_words)
-    hits: list[Hit] = run_content_gates(content_texts(plan, out_words, caption), caption, cfg, brand)
+    texts = content_texts(plan, out_words, caption)
+    hits: list[Hit] = run_content_gates(texts, caption, cfg, brand)
+    from .accounts import copy_hits
+
+    hits += copy_hits(conn, texts)  # copy guard: no reel that copies a stored reference/competitor caption
     for h in hits:
         _check(checks, f"gate:{h.gate}:{h.rule}", False, h.short(), hard=(h.severity == "hard"))
     for flag in plan.get("risk_flags", []) or []:

@@ -11,6 +11,11 @@ He films a clip and drops it in a OneDrive folder. The engine does everything el
 - schedules the post into the slot its bandit thinks is best, and publishes through the official Instagram API;
 - collects metrics, learns which hooks, lengths and slots work, rewrites its own playbook with evidence, and writes next week's filming brief.
 
+Since 2026-10-14 (branch `feature/calendar-upload-accounts`, see `docs/DECISIONS_PENDING.md`):
+- a **Saudi occasions calendar** (Founding Day, Flag Day, National Day, Ramadan and the Eids via the Umm al-Qura calendar, plus international, tech and career days, each with a source): the brief looks 1-3 weeks ahead and the scheduler posts an occasion reel just before or on its day; editable from the dashboard and `reel calendar`;
+- an **Upload clip** button in the dashboard that feeds the normal intake path (127.0.0.1 only, CSRF-protected, never publishes);
+- **account analysis**: attach your own and reference/competitor accounts, import their public numbers (Business Discovery isn't available on the Instagram-Login path, see `docs/API_NOTES.md`), and the brain's pseudonymised analysis feeds the brief. Privacy: `docs/PRIVACY.md`.
+
 **Status:** built and tested in **dry-run** only. Nothing has been posted; going live needs the owner's recorded OK (see *Safe by design*). Windows only.
 
 > **بالعربية:** «Reel Engine» نظام آلي لحساب ريلز واحد على إنستغرام (محتوى باللهجة السعودية عن أدوات الذكاء الاصطناعي والوظائف التقنية). يصوّر صاحب الحساب المقطع ويرميه في مجلد، والنظام يقص التكرار والتوقفات، ويضيف ترجمة عربية مضبوطة، ويفحص الجودة والحقائق والأنظمة، ويكتب الوصف، ويجدول وينشر عبر واجهة إنستغرام الرسمية، ثم يتعلم من الأرقام ويكتب خطة التصوير للأسبوع الجاي. **الحالة:** مختبر في وضع التجربة (dry-run) فقط، وما نشر شي.
@@ -27,7 +32,7 @@ The dashboard screenshots use seeded **demo data** (every page carries a DEMO ba
 - **Safe by design.** Official API only; tokens only in Windows Credential Manager; the LLM runs with no tools for writing tasks; the dashboard is localhost-only with a strict CSP; idempotent publishing (crash-tested at every step); a kill switch; dry-run by default. `reel mode live` refuses unless `docs/DECISIONS.md` holds a `LIVE-OK` line, a token is stored, `doctor --live` has no FAIL, and the owner types `GO LIVE`.
 
 ## Stack
-Python 3.10 · faster-whisper large-v3 (CUDA, RTX 4070) · ffmpeg 9 (libass + HarfBuzz + FriBidi, portable) · headless Claude Code CLI as the "brain" (structured JSON output, schema-validated) · SQLite · Jinja2 static dashboard with inline-SVG charts · Instagram API with Instagram Login (v26.0, resumable upload) · Windows Task Scheduler.
+Python 3.10 · hijridate (Umm al-Qura) · faster-whisper large-v3 (CUDA, RTX 4070) · ffmpeg 9 (libass + HarfBuzz + FriBidi, portable) · headless Claude Code CLI as the "brain" (structured JSON output, schema-validated) · SQLite · Jinja2 static dashboard with inline-SVG charts · Instagram API with Instagram Login (v26.0, resumable upload) · Windows Task Scheduler.
 
 ## Run it
 ```powershell
@@ -51,6 +56,8 @@ One-time account setup: `docs/SETUP.md`. Every command: `docs/RUNBOOK.md`. Secur
 Results on 2026-10-03 (Windows 11, Python 3.10):
 - In the owner's checkout (with his private brand pack): **485 passed**, 2 deselected (the opt-in e2e tests).
 - In a clean copy of exactly this repo's files (no `config.toml`, the example brand pack, ffmpeg in `bin/` as `setup.ps1` installs it): **436 passed**, 2 deselected. The difference is the 49 gate tests written around the owner's personal facts, which stay out of the repo; `tests/test_gates_example.py` runs the same gate engine against the example pack.
+
+Results on 2026-10-14 (macOS, Python 3.10, branch `feature/calendar-upload-accounts`, no ffmpeg/GPU, the CUDA and Windows-only wheels left out of the install): **552 passed, 4 skipped, 1 failed**, 2 deselected. The 4 skips need the portable ffmpeg; the 1 failure is `test_vault_refuses_unsafe_paths[..\\escape.md]`, which tests a Windows path separator and fails on macOS before and after this branch (baseline on the same Mac: 431 passed, 4 skipped, 1 failed). ✍️ Not yet re-run on the Windows PC.
 
 ## Results (measured in this build)
 - The synthetic 39.0 s Saudi-voice test clip (false start, filler, bad retake, long pauses; iPhone-style HEVC HDR, rotated) became a 17.1 s reel with 3 cuts. The brain kept the right takes and fixed an ASR error («سوّ CV»; `docs/qa/e2e/brain-edit-plan-2026-09-29.json`). Critique scores in the passing real-brain run: hook 7, clarity 8, value 7, accuracy 9 (`docs/qa/e2e/real-brain-summary.json`).

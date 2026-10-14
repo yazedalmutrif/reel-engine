@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% macro cat_chip(cat, label) %}<span class="chip chip-sm cal-cat-{{ cat }}"><span class="dot" aria-hidden="true"></span>{{ label }}</span>{% endmacro %}
+{% macro flag(official) %}{% if official %}<span class="cal-flag cal-flag-official">Official</span>{% else %}<span class="cal-flag cal-flag-intl">Not official</span>{% endif %}{% endmacro %}
+{% block main %}
+{% set cal = calendar %}
+<div class="page-head">
+  <h1>Calendar</h1>
+  <p class="lede">Saudi and international occasions worth a reel. The weekly brief looks {{ cal.lo }} to {{ cal.hi }} days ahead and plans around them; a reel about an occasion is posted just before or on its day.</p>
+</div>
+
+<section class="section" aria-labelledby="cal-up-h">
+  <div class="section-head">
+    <h2 id="cal-up-h">Coming up in the next 3 weeks</h2>
+    <p class="section-sub">Film-by = {{ cal.lead }} days before. Hijri dates follow Umm al-Qura and can move a day after moon sighting.</p>
+  </div>
+  {% if cal.soon %}
+  <ul class="cal-strip">
+    {% for x in cal.soon %}
+    <li>
+      <article class="card cal-up" aria-labelledby="up-{{ x.slug }}">
+        <div class="cal-up-top">
+          <p class="cal-in{% if x.days_until == 0 %} cal-in-today{% endif %}">{% if x.days_until == 0 %}Today{% else %}{{ x.days_until }}<span class="unit"> day{{ 's' if x.days_until != 1 }}</span>{% endif %}</p>
+          <div class="chips">{{ cat_chip(x.category, x.cat_label) }} {{ flag(x.official) }}</div>
+        </div>
+        <p class="cal-date"><time datetime="{{ x.start }}">{{ x.start }}</time>{% if x.hijri %} · <span class="cal-hijri">{{ x.hijri }}</span>{% endif %}{% if x.end != x.start %} · to <time datetime="{{ x.end }}">{{ x.end }}</time>{% endif %}</p>
+        <h3 id="up-{{ x.slug }}" class="cal-name-ar" lang="ar" dir="rtl">{{ x.name_ar }}</h3>
+        <p class="cal-name-en">{{ x.name_en }}</p>
+        {% if x.approximate %}<p class="cal-approx"><span aria-hidden="true">≈</span> Approximate ±1 day (moon sighting)</p>{% endif %}
+        {% if x.angle %}
+        <div>
+          <p class="kpi-label">Content angle</p>
+          <p class="cal-angle"{{ x.angle|langattrs }}>{{ x.angle }}</p>
+        </div>
+        {% endif %}
+        <p class="cal-filmby"><span class="kpi-label">Film by</span> <time class="mono" datetime="{{ x.film_by }}">{{ x.film_by }}</time></p>
+        {% if x.source_text %}<p class="copy-line"><span class="kpi-label">Source</span> <code class="copy-text" id="src-{{ x.slug }}">{{ x.source_text }}</code>{% if x.checked_on %} <span>checked <time class="mono" datetime="{{ x.checked_on }}">{{ x.checked_on }}</time></span>{% endif %} <button type="button" class="btn btn-ghost btn-sm" data-copy="src-{{ x.slug }}" data-write-only aria-label="Copy the source address for {{ x.name_en }}">Copy</button></p>{% endif %}
+      </article>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <section class="card">{{ m.empty("Nothing in the next 3 weeks", "No occasion starts in the look-ahead window. Add one below, or plan normal content.", "◷") }}</section>
+  {% endif %}
+</section>
+
+<section class="section" aria-labelledby="cal-mo-h">
+  <div class="section-head">
+    <h2 id="cal-mo-h">Next three months</h2>
+    <p class="section-sub">Week starts Sunday; Friday and Saturday are shaded as the weekend. A dot marks the first day; a bar marks the days an occasion continues.</p>
+  </div>
+  <p class="legend">{% for k, v in cal.categories.items() %}<span class="key"><span class="key-dot cal-dot-{{ k }}" aria-hidden="true"></span>{{ v }}</span>{% endfor %}</p>
+  <div class="cal-months">
+    {% for mo in cal.months %}
+    {% set mid = 'cal-m-%04d-%02d'|format(mo.year, mo.month) %}
+    <section class="card cal-month" aria-labelledby="{{ mid }}">
+      <h3 id="{{ mid }}">{{ mo.label }}{% if mo.hijri %} <span class="mono">{{ mo.hijri.split(' ', 1)[1] }}</span>{% endif %}</h3>
+      <table class="cal-grid">
+        <caption class="sr-only">{{ mo.label }}, week starts Sunday; Friday and Saturday are the weekend</caption>
+        <thead><tr>{% for d in cal.weekdays %}<th scope="col">{{ d }}</th>{% endfor %}</tr></thead>
+        <tbody>
+          {% for wk in mo.weeks %}
+          <tr>
+            {% for c in wk %}
+            {% if not c.in_month %}<td class="cal-pad"></td>{% else %}
+            <td class="{{ 'cal-wknd ' if c.date.weekday() in (4, 5) }}{{ 'cal-today ' if c.today }}{% if c.cont %}cal-cont cal-cat-{{ c.cont }}{% endif %}"{% if c.today %} aria-current="date"{% endif %}><span class="cal-num">{{ c.date.day }}</span>{% if c.today %}<span class="sr-only">today</span>{% endif %}
+              {% for it in c['items'] if it.first %}<span class="cal-ev cal-cat-{{ it.category }}" data-cal-day="{{ it.slug }}"><span class="dot" aria-hidden="true"></span><span class="cal-ev-name" lang="ar" dir="rtl" title="{{ it.name_en }}">{{ it.name_ar }}</span></span>{% endfor %}
+            </td>
+            {% endif %}
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <ul class="cal-agenda" aria-label="{{ mo.label }} occasions">
+        {% for x in mo.agenda %}
+        <li><span class="cal-agenda-day{{ ' cal-agenda-today' if x.today }}"><time datetime="{{ x.date }}">{{ x.label }}</time></span><span class="cal-agenda-what">{{ cat_chip(x.category, cal.categories.get(x.category, x.category)) }}<span lang="ar" dir="rtl">{{ x.name_ar }}</span><span class="muted">{{ x.name_en }}</span>{% if x.hijri %} <span class="mono cal-hijri">{{ x.hijri }}</span>{% endif %}</span></li>
+        {% else %}
+        <li class="cal-agenda-empty"><p class="cal-agenda-none">No occasions this month.</p></li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="card card-flush" aria-labelledby="cal-all-h">
+  <div class="card-head card-pad">
+    <h2 id="cal-all-h">All occasions <span class="count mono">{{ cal.rows|length }}</span></h2>
+    <a class="btn btn-sm" href="#cal-form" data-write-only data-cal-new>＋ Add occasion</a>
+  </div>
+  {% if cal.rows %}
+  <table class="tbl cal-table">
+    <caption class="sr-only">All occasions, sorted by next date</caption>
+    <thead><tr><th scope="col">Occasion</th><th scope="col">Rule</th><th scope="col">Next date</th><th scope="col">Category</th><th scope="col">Status</th><th scope="col">Source</th><th scope="col" class="cal-actions" data-write-only><span class="sr-only">Actions</span></th></tr></thead>
+    <tbody>
+      {% for o in cal.rows %}
+      <tr data-cal-row="{{ o.slug }}" data-cal-json="{{ o.json }}">
+        <th scope="row"><span class="cal-occ"><span class="cal-occ-ar" lang="ar" dir="rtl">{{ o.name_ar }}</span><span class="cal-occ-en">{{ o.name_en }}</span></span></th>
+        <td data-label="Rule"><span class="cal-rule">{{ {'gregorian': 'Fixed', 'hijri': 'Hijri', 'once': 'One-off'}[o.rule] }} · {{ o.date_text }}{% if o.duration_days > 1 %} · {{ o.duration_days }} days{% endif %}</span></td>
+        <td data-label="Next date">{% if o.next %}<span class="mono">{{ o.next }}</span>{% if o.rule == 'hijri' %} <span class="muted" title="Approximate, ±1 day">≈</span>{% endif %}{% else %}<span class="muted">past</span>{% endif %}</td>
+        <td data-label="Category">{{ cat_chip(o.category, o.cat_label) }}</td>
+        <td data-label="Status">{{ flag(o.official) }}</td>
+        <td data-label="Source">{% if o.source_text %}<span class="mono muted">{{ o.source_text[:40] }}{{ '…' if o.source_text|length > 40 }}</span>{% if o.checked_on %} <span class="muted">· {{ o.checked_on }}</span>{% endif %}{% else %}<span class="muted">–</span>{% endif %}</td>
+        <td class="cal-actions" data-write-only><span class="btn-row"><button type="button" class="btn btn-sm" data-cal-edit="{{ o.slug }}" aria-label="Edit {{ o.name_en }}">Edit</button><button type="button" class="btn btn-sm btn-danger" data-cal-delete="{{ o.slug }}" aria-label="Delete {{ o.name_en }}" aria-expanded="false" aria-controls="cal-confirm-{{ o.slug }}">Delete</button></span></td>
+      </tr>
+      <tr class="cal-confirm-row" data-write-only data-cal-confirm-row="{{ o.slug }}" hidden>
+        <td colspan="7" class="cal-confirm-cell">
+          <div class="confirm" id="cal-confirm-{{ o.slug }}" role="group" aria-labelledby="cal-confirm-{{ o.slug }}-t" data-cal-confirm="{{ o.slug }}">
+            <p class="confirm-text" id="cal-confirm-{{ o.slug }}-t" tabindex="-1">Delete <strong>{{ o.name_en }}</strong>? Briefs stop planning for it{% if o.origin == 'seed' %}, and re-seeding won't bring it back{% endif %}.</p>
+            <span class="btn-row"><button type="button" class="btn btn-sm btn-danger-solid" data-cal-delete-confirm="{{ o.slug }}">Delete</button><button type="button" class="btn btn-sm btn-ghost" data-cal-delete-cancel="{{ o.slug }}">Cancel</button></span>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="card-pad">{{ m.empty("No occasions yet", "Run  reel calendar seed  to load Founding Day, Ramadan, National Day and the rest, or add one below.", "◷") }}</div>
+  {% endif %}
+</section>
+
+<div class="callout callout-row" data-readonly-note>
+  <span class="sev-icon sev-info" aria-hidden="true">i</span>
+  <div>
+    <p class="callout-title">Read-only view</p>
+    <p>Open the dashboard with <code>reel dashboard --open</code> to edit here, or use <code>reel calendar add …</code>, <code>reel calendar edit --slug &lt;id&gt; …</code> and <code>reel calendar delete --slug &lt;id&gt;</code>.</p>
+  </div>
+</div>
+
+<section class="card cal-form-card" id="cal-form" aria-labelledby="cal-form-h" data-write-only>
+  <div class="card-head">
+    <h2 id="cal-form-h" data-cal-form-title>Add occasion</h2>
+    <p class="card-sub">Fields marked optional can stay empty. Every day needs a source you checked.</p>
+  </div>
+  <form class="form" id="cal-form-el" data-cal-form novalidate>
+    <input type="hidden" name="slug" value="" data-cal-slug>
+    <div class="form-grid">
+      <div class="field">
+        <label class="field-label" for="cal-name-ar">Arabic name</label>
+        <input class="input" id="cal-name-ar" name="name_ar" lang="ar" dir="rtl" required maxlength="80" aria-describedby="cal-name-ar-err">
+        <p class="field-error" id="cal-name-ar-err"></p>
+      </div>
+      <div class="field">
+        <label class="field-label" for="cal-name-en">English name</label>
+        <input class="input" id="cal-name-en" name="name_en" dir="ltr" required maxlength="80" aria-describedby="cal-name-en-err">
+        <p class="field-error" id="cal-name-en-err"></p>
+      </div>
+      <fieldset class="field span-all">
+        <legend>Date rule</legend>
+        <div class="seg">
+          <label class="seg-opt"><input type="radio" name="rule" value="gregorian" data-cal-rule checked><span>Fixed Gregorian</span></label>
+          <label class="seg-opt"><input type="radio" name="rule" value="hijri" data-cal-rule><span>Hijri (Umm al-Qura)</span></label>
+          <label class="seg-opt"><input type="radio" name="rule" value="once" data-cal-rule><span>One-off date</span></label>
+        </div>
+        <p class="field-hint cal-hijri-note" data-cal-rule-only="hijri" hidden>Repeats every Hijri year. Gregorian dates are worked out from Umm al-Qura and marked approximate (±1 day).</p>
+      </fieldset>
+    </div>
+    <div class="form-grid form-grid-3">
+      <div class="field">
+        <label class="field-label" for="cal-month">Month</label>
+        <span class="select">
+          <select class="input" id="cal-month" name="month">
+            {% for i in range(1, 13) %}<option value="{{ i }}">{{ i }} · {{ ['January','February','March','April','May','June','July','August','September','October','November','December'][i - 1] }} / {{ ['Muharram','Safar','Rabi al-Awwal','Rabi al-Thani','Jumada al-Ula','Jumada al-Akhirah','Rajab','Shaban','Ramadan','Shawwal','Dhu al-Qadah','Dhu al-Hijjah'][i - 1] }}</option>{% endfor %}
+          </select>
+        </span>
+      </div>
+      <div class="field">
+        <label class="field-label" for="cal-day">Day</label>
+        <input class="input input-mono" id="cal-day" name="day" type="number" inputmode="numeric" min="1" max="31" required value="1" aria-describedby="cal-day-err">
+        <p class="field-error" id="cal-day-err"></p>
+      </div>
+      <div class="field" data-cal-rule-only="once" hidden>
+        <label class="field-label" for="cal-year">Year</label>
+        <input class="input input-mono" id="cal-year" name="year" type="number" inputmode="numeric" min="2000" max="2100" disabled>
+      </div>
+      <div class="field">
+        <label class="field-label" for="cal-dur">Duration <span class="field-opt">days</span></label>
+        <input class="input input-mono" id="cal-dur" name="duration_days" type="number" inputmode="numeric" min="1" max="60" value="1" aria-describedby="cal-dur-hint">
+        <p class="field-hint" id="cal-dur-hint">1 for a single day.</p>
+      </div>
+    </div>
+    <div class="form-grid">
+      <div class="field">
+        <label class="field-label" for="cal-cat">Category</label>
+        <span class="select">
+          <select class="input" id="cal-cat" name="category">
+            {% for k, v in cal.categories.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+          </select>
+        </span>
+      </div>
+      <div class="field">
+        <span class="field-label">Status</span>
+        <label class="check-row"><input type="checkbox" name="official" value="1" aria-describedby="cal-off-hint"> Official Saudi occasion</label>
+        <p class="field-hint" id="cal-off-hint">Leave unticked for international or unofficial days (e.g. Boss's Day).</p>
+      </div>
+      <div class="field span-all">
+        <label class="field-label" for="cal-angle">Content angle <span class="field-opt">optional</span></label>
+        <textarea class="input" id="cal-angle" name="angle" dir="auto" rows="2" maxlength="400" aria-describedby="cal-angle-hint"></textarea>
+        <p class="field-hint" id="cal-angle-hint">One line the brief can turn into a script. Arabic or English.</p>
+      </div>
+      <div class="field span-all">
+        <label class="field-label" for="cal-notes">Notes <span class="field-opt">optional</span></label>
+        <textarea class="input" id="cal-notes" name="notes" dir="auto" rows="2" maxlength="600"></textarea>
+      </div>
+      <div class="field span-all">
+        <label class="field-label" for="cal-kw">Match words <span class="field-opt">optional</span></label>
+        <input class="input" id="cal-kw" name="keywords" dir="auto" maxlength="400" aria-describedby="cal-kw-hint">
+        <p class="field-hint" id="cal-kw-hint">Comma-separated words that mark a reel as about this day (the names always count). The scheduler then posts it in the occasion's window.</p>
+      </div>
+      <div class="field">
+        <label class="field-label" for="cal-src">Source address</label>
+        <input class="input input-mono" id="cal-src" name="source_url" dir="ltr" inputmode="url" autocomplete="off" spellcheck="false" placeholder="www.my.gov.sa/…" maxlength="400" aria-describedby="cal-src-err cal-src-hint">
+        <p class="field-error" id="cal-src-err"></p>
+        <p class="field-hint" id="cal-src-hint">The page you checked. Shown as text only; the dashboard never links out.</p>
+      </div>
+      <div class="field">
+        <label class="field-label" for="cal-checked">Checked on</label>
+        <input class="input input-mono" id="cal-checked" name="checked_on" type="date">
+      </div>
+    </div>
+    <div class="form-foot">
+      <p class="form-status" role="status" aria-live="polite" data-cal-form-status></p>
+      <span class="btn-row btn-row-end">
+        <button type="button" class="btn btn-ghost" data-cal-form-cancel>Clear</button>
+        <button type="submit" class="btn btn-primary" data-cal-submit>Add occasion</button>
+      </span>
+    </div>
+  </form>
+</section>
+{% endblock %}

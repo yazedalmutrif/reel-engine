@@ -4,7 +4,8 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any
 
-from . import brain, db, learner, vault
+from . import accounts as acctmod
+from . import brain, db, learner, occasions, vault
 from .gates import facts_for_prompt, run_content_gates
 from .log import get_logger
 
@@ -51,11 +52,21 @@ def make_brief(ctx, k: int = 6) -> dict:
     eps = [e for e in eps_all if not e.get("blocked")]
     trends = latest_trends(conn).get("items", [])
     ctas = _cta_lines(ctx)
+    try:
+        occasions.ensure_seeded(conn, cfg)
+        occ = occasions.upcoming(conn, cfg, include_demo=False) if cfg.get("calendar.enabled", True) else []
+    except Exception as exc:  # noqa: BLE001 - a calendar problem must not cost the week's brief
+        log.warning("calendar unavailable for the brief: %s", exc)
+        occ = []
+    occ_ids = {x.occasion["slug"] for x in occ}
+    copy_caps = acctmod.stored_captions(conn)
 
     def validate(b: dict) -> list[str]:
         errs = []
         if len(b["scripts"]) != len(slots):
             errs.append(f"write exactly {len(slots)} scripts")
+        if sum(1 for s in b["scripts"] if s.get("occasion")) > 2:
+            errs.append("at most 2 scripts may be about an occasion")
         for i, (s, want) in enumerate(zip(b["scripts"], slots), 1):
             if s["hook_type"] != want["hook_type"] or s["duration_band"] != want["duration_band"]:
                 errs.append(f"script {i} must use hook_type={want['hook_type']} and duration_band={want['duration_band']}")
@@ -71,6 +82,10 @@ def make_brief(ctx, k: int = 6) -> dict:
                 if h.severity == "hard":
                     errs.append(f"script {i}: {h.reason} ('{h.match}')")
             errs += [f"script {i}: {e}" for e in source_problems(text, s.get("sources", []), trends)]
+            if s.get("occasion") and s["occasion"] not in occ_ids:
+                errs.append(f"script {i}: occasion must be one of the upcoming ids ({', '.join(sorted(occ_ids)) or 'none'}) or empty")
+            if copy_caps and acctmod.copy_overlap(text, copy_caps) >= acctmod.COPY_THRESHOLD:
+                errs.append(f"script {i}: copies another account's caption; write an original script")
         return errs
 
     ctx_prompt = {
@@ -81,11 +96,16 @@ def make_brief(ctx, k: int = 6) -> dict:
         "episodes": "\n".join(f"- [{e['topic']}] {e['text']}" for e in eps),
         "rules": "\n".join(f"- {r['id']}: {r['text']} ({r['evidence']})" for r in pb["rules"]),
         "facts": facts_for_prompt(ctx.brand),
+        "occasions": occasions.brief_text(occ),
+        "occasion_checklist": "\n".join(f"- {c}" for c in ((ctx.brand.occasion_rules or {}).get("filming_checklist") or [])),
+        "accounts": acctmod.brief_text(conn) if cfg.get("accounts.enabled", True) else "(account analysis off)",
     }
     out = brain.ask(cfg, conn, "brief", ctx_prompt, model=cfg["brain"]["review_model"], validate=validate)
     ws = week_start(cfg)
     brief = {"week_start": ws.isoformat(), "generated_at": db.now_iso(), "playbook_version": pb["version"], "scripts": [
-        {"n": i, **s, "explore": slots[i - 1]["explore"]} for i, s in enumerate(out["scripts"], 1)], "notes": out["notes"]}
+        {"n": i, **s, "explore": slots[i - 1]["explore"]} for i, s in enumerate(out["scripts"], 1)], "notes": out["notes"],
+        "occasions": [x.as_dict() for x in occ],
+        "occasion_checklist": list((ctx.brand.occasion_rules or {}).get("filming_checklist") or []) if occ else []}
     path = write_brief_note(cfg, brief)
     conn.execute("INSERT INTO briefs(week_start, created_at, json, path) VALUES(?,?,?,?)", (ws.isoformat(), db.now_iso(), db.jdump(brief), str(path)))
     ctx.notify("info", "This week's filming brief is ready", f"{len(brief['scripts'])} scripts for the week of {ws.isoformat()}", None)
@@ -142,11 +162,23 @@ def brief_markdown(brief: dict) -> str:
             f"- **Shot:** {s['shot_note']}",
             f"- **Experiment:** {s['experiment']}" + (" (exploration)" if s.get("explore") else ""),
         ]
+        if s.get("occasion"):
+            lines.append(f"- **Occasion:** {s['occasion']} (post it in the occasion's window; the scheduler handles it)")
         if s.get("sources"):
             lines.append("- **Re-check before filming:** " + " · ".join(s["sources"]))
         lines.append("")
     if brief.get("notes"):
         lines += ["**Notes:** " + brief["notes"], ""]
+    if brief.get("occasions"):
+        lines += ["## Coming up (Saudi occasions calendar)", ""]
+        for o in brief["occasions"]:
+            when = o["start"] + (f" to {o['end']}" if o["end"] != o["start"] else "")
+            lines.append(f"- **{o['name_en']}** / {o['name_ar']}: {when} (in {o['days_until']} days; film by {o['film_by']})"
+                         + (" · Hijri date, may move a day: re-check the official announcement" if o["approximate"] else "")
+                         + (f" · angle: {o['angle']}" if o.get("angle") else ""))
+        lines.append("")
+    if brief.get("occasion_checklist"):
+        lines += ["**Occasion filming checklist:**"] + [f"- [ ] {c}" for c in brief["occasion_checklist"]] + [""]
     return "\n".join(lines)
 
 

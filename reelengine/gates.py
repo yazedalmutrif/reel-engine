@@ -9,6 +9,9 @@ Rule files:
   brand/facts.yaml      verified facts + forbidden trap patterns (Accuracy Audit)
   brand/gates.yaml      engagement bait, guarantees, salary, fear, ads, reposts, service CTA
   brand/never_say.yaml  literal phrases from the brand copy's never-say list (generated)
+  brand/gates_occasions.yaml  national/religious occasion rules (flag, Shahada, emblem, leaders,
+                        religion, occasion + offer). Structured: match / near / window / severity.
+                        The generic file always applies; a brand pack's copy can only add rules.
 """
 from __future__ import annotations
 
@@ -73,10 +76,41 @@ class Brand:
     hooks: dict
     voice: str
     styles: dict
+    occasion_rules: dict = None  # type: ignore[assignment]
 
 
 def _yaml(path: Path) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+
+
+GENERIC_BRAND = Path(__file__).resolve().parents[1] / "brand"
+
+
+def occasion_rules_path(brand_dir: Path) -> Path:
+    own = Path(brand_dir) / "gates_occasions.yaml"
+    return own if own.exists() else GENERIC_BRAND / "gates_occasions.yaml"
+
+
+def load_occasion_rules(brand_dir: Path) -> dict:
+    """The generic rules ALWAYS apply; a brand pack's gates_occasions.yaml can only ADD groups (new names),
+    rules (new ids) and checklist lines, never replace or drop the generic ones."""
+    base = GENERIC_BRAND / "gates_occasions.yaml"
+    out = _yaml(base) if base.exists() else {}
+    out = {"groups": dict(out.get("groups") or {}), "rules": list(out.get("rules") or []),
+           "filming_checklist": list(out.get("filming_checklist") or [])}
+    own = Path(brand_dir) / "gates_occasions.yaml"
+    if own.exists() and own.resolve() != base.resolve():
+        extra = _yaml(own)
+        for k, v in (extra.get("groups") or {}).items():
+            out["groups"].setdefault(k, v)
+        ids = {r["id"] for r in out["rules"]}
+        for r in extra.get("rules") or []:
+            if not (isinstance(r, dict) and r.get("id") and r.get("match") and r.get("reason")):
+                raise ValueError(f"{own}: every occasion rule needs id, match and reason")
+            if r["id"] not in ids:
+                out["rules"].append(r)
+        out["filming_checklist"] += [c for c in (extra.get("filming_checklist") or []) if c not in out["filming_checklist"]]
+    return out
 
 
 @lru_cache(maxsize=4)
@@ -90,12 +124,15 @@ def _load_brand_cached(brand_dir: str, stamp: tuple) -> Brand:
         hooks=_yaml(d / "hooks.yaml") if (d / "hooks.yaml").exists() else {},
         voice=(d / "voice.md").read_text(encoding="utf-8") if (d / "voice.md").exists() else "",
         styles=_yaml(d / "styles.yaml") if (d / "styles.yaml").exists() else {},
+        occasion_rules=load_occasion_rules(d),
     )
 
 
 def load_brand(brand_dir: Path) -> Brand:
     files = ("facts.yaml", "gates.yaml", "never_say.yaml", "captions.yaml", "hooks.yaml", "voice.md", "styles.yaml")
     stamp = tuple((f, (brand_dir / f).stat().st_mtime if (brand_dir / f).exists() else 0) for f in files)
+    for orp in (GENERIC_BRAND / "gates_occasions.yaml", brand_dir / "gates_occasions.yaml"):
+        stamp += ((str(orp), orp.stat().st_mtime if orp.exists() else 0),)
     return _load_brand_cached(str(brand_dir), stamp)
 
 
@@ -187,6 +224,39 @@ def check_legal(texts: dict[str, str], brand: Brand, service_enabled: bool) -> l
     return hits
 
 
+SEVERITY = {"hold": "hard", "warn": "soft"}
+
+
+def check_occasion_rules(texts: dict[str, str], rules: dict | None) -> list[Hit]:
+    """gates_occasions.yaml: `match` (a group name or a regex), optionally only `near` another
+    group within `window` words (0 = anywhere in the same text), optionally only in `fields`."""
+    hits: list[Hit] = []
+    if not rules:
+        return hits
+    groups = rules.get("groups") or {}
+    for field, raw in texts.items():
+        text = normalize(raw)
+        if not text.strip():
+            continue
+        for r in rules.get("rules") or []:
+            if r.get("fields") and field not in r["fields"]:
+                continue
+            pat = groups.get(r["match"], r["match"])
+            near = groups.get(r["near"], r["near"]) if r.get("near") else None
+            sev = SEVERITY.get(str(r.get("severity", "hold")), "hard")
+            for m in _find([pat], text):
+                if near is not None:
+                    window = int(r.get("window", 8))
+                    if window == 0:
+                        if not _find([near], text):
+                            continue
+                    elif not _near(text, m, [near], window):
+                        continue
+                hits.append(Hit("legal", f"occasion.{r['id']}", sev, r["reason"], field, m.group(0).strip()))
+                break
+    return hits
+
+
 def hashtags_of(caption: str) -> list[str]:
     return _HASHTAG.findall(caption or "")
 
@@ -225,6 +295,7 @@ def check_caption_limits(caption_json: dict, cfg, brand: Brand | None = None) ->
 def run_content_gates(texts: dict[str, str], caption_json: dict | None, cfg, brand: Brand) -> list[Hit]:
     hits = check_facts(texts, brand.facts)
     hits += check_legal(texts, brand, bool(cfg["cta"]["service_enabled"]))
+    hits += check_occasion_rules(texts, brand.occasion_rules)
     if caption_json is not None:
         hits += check_caption_limits(caption_json, cfg, brand)
     # de-duplicate (same rule + field)

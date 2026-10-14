@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% macro role_chip(role) %}<span class="chip chip-sm acct-role-{{ role }}"><span class="dot" aria-hidden="true"></span>{{ role|human }}</span>{% endmacro %}
+{% macro analysis_card(a, title_html_id, label, role, posts) %}
+<div class="acct-an-grid">
+  <div class="acct-an-cell"><p class="kpi-label">Topics</p><div class="chips">{% for t in a.topics %}<span class="chip"{{ t|langattrs }}>{{ t }}</span>{% else %}<span class="muted">–</span>{% endfor %}</div></div>
+  <div class="acct-an-cell"><p class="kpi-label">Hook types</p><div class="chips">{% for t in a.hook_types %}<span class="chip">{{ hook_names.get(t) or (t|human) }}</span>{% else %}<span class="muted">–</span>{% endfor %}</div></div>
+  <div class="acct-an-cell"><p class="kpi-label">Formats</p><div class="chips">{% for t in a.formats %}<span class="chip"{{ t|langattrs }}>{{ t }}</span>{% else %}<span class="muted">–</span>{% endfor %}</div></div>
+  <div class="acct-an-cell"><p class="kpi-label">Typical length</p><p class="acct-an-big">{{ a.typical_length or '–' }}</p></div>
+  <div class="acct-an-cell"><p class="kpi-label">Best posting times</p><div class="chips">{% for t in a.best_times %}<span class="chip mono">{{ t }}</span>{% else %}<span class="muted">–</span>{% endfor %}</div></div>
+  <div class="acct-an-cell"><p class="kpi-label">Confidence</p><p class="acct-an-big">{{ (a.confidence or '–')|human }}</p>{% if posts is not none %}<p class="field-hint">from {{ posts }} stored post{{ 's' if posts != 1 }}</p>{% endif %}</div>
+</div>
+{% if a.summary %}<p class="lede"{{ a.summary|langattrs }}>{{ a.summary }}</p>{% endif %}
+{% if a.performing %}
+<div>
+  <h4 class="sub-h">What's performing</h4>
+  <ul class="acct-ideas">{% for p in a.performing %}<li><span class="mono">{{ p.post }}</span> · <span{{ p.why|langattrs }}>{{ p.why }}</span></li>{% endfor %}</ul>
+</div>
+{% endif %}
+{% endmacro %}
+{% block main %}
+{% set A = accounts %}
+<div class="page-head">
+  <h1>Accounts</h1>
+  <p class="lede">Your account plus the reference and competitor accounts the brain learns from. Public data only: caption text is wiped after {{ A.retention_days }} days and every stored post is deleted after {{ A.metrics_retention_days }}. The brain only ever sees pseudonyms (ACC_01…), never a username.</p>
+</div>
+
+{% if A.discovery != 'facebook_login' %}
+<div class="callout callout-warn callout-row" role="note">
+  <span class="sev-icon sev-warning" aria-hidden="true">!</span>
+  <div>
+    <p class="callout-title">Other accounts can't be fetched automatically</p>
+    <p>Business Discovery (reading another account's public posts) only exists on the Instagram API with Facebook Login. This engine uses Instagram Login, so other accounts come in by manual import: paste reel links with their numbers, or a CSV. Turning on Business Discovery needs a Facebook Page linked to your account and a separate Facebook-Login token (see docs/API_NOTES.md). No scraping, ever. Your own reels' numbers come from the engine itself.</p>
+  </div>
+</div>
+{% endif %}
+
+<section class="section" aria-labelledby="acct-h">
+  <div class="section-head">
+    <h2 id="acct-h">Attached accounts <span class="count mono">{{ A.rows|length }}</span></h2>
+    <p class="section-sub">Own = this engine posts here. Reference = an account to learn from. Competitor = an account to watch.</p>
+  </div>
+  {% if A.rows %}
+  <ul class="acct-grid">
+    {% for r in A.rows %}
+    <li>
+      <article class="card acct{{ ' acct-own' if r.role == 'own' }}" aria-labelledby="acct-{{ r.username }}">
+        <div class="acct-top">
+          <span class="acct-avatar" aria-hidden="true">{{ r.username[:1]|upper }}</span>
+          <div class="acct-id">
+            <h3 class="acct-user mono" id="acct-{{ r.username }}">@{{ r.username }}</h3>
+            <div class="chips">{{ role_chip(r.role) }}<span class="chip chip-sm">{{ 'API' if r.source == 'api' else ('Config' if r.source == 'config' else 'Manual') }}</span><span class="chip chip-sm mono" title="The only name the brain sees">{{ r.pseudonym }}</span></div>
+          </div>
+        </div>
+        <dl class="facts">
+          <div><dt>Posts stored</dt><dd class="mono">{{ r.posts }}</dd></div>
+          <div><dt>Last import</dt><dd class="mono">{{ clock.rel(r.last_import_t) if r.last_import_t else 'never' }}</dd></div>
+          <div><dt>Attached</dt><dd class="mono">{{ clock.date(r.added_t) }}</dd></div>
+        </dl>
+        {% if r.notes %}<p class="muted"{{ r.notes|langattrs }}>{{ r.notes }}</p>{% endif %}
+        <p class="acct-retention"><span aria-hidden="true">◷</span> Public data only · captions wiped after {{ A.retention_days }} days.</p>
+        <div class="acct-foot btn-row">
+          {% if r.analysis %}<a class="btn btn-sm btn-ghost" href="#an-{{ r.username }}">See analysis</a>{% endif %}
+          <a class="btn btn-sm" href="#acct-import" data-write-only data-acct-import-for="{{ r.username }}">Import posts</a>
+          <button type="button" class="btn btn-sm btn-danger" data-write-only data-acct-remove="{{ r.username }}" aria-expanded="false" aria-controls="acct-confirm-{{ r.username }}">Remove</button>
+        </div>
+        <div class="confirm" id="acct-confirm-{{ r.username }}" role="group" aria-labelledby="acct-confirm-{{ r.username }}-t" data-acct-confirm="{{ r.username }}" hidden>
+          <p class="confirm-text" id="acct-confirm-{{ r.username }}-t" tabindex="-1">Remove <strong>@{{ r.username }}</strong> and delete its {{ r.posts }} stored post{{ 's' if r.posts != 1 }} now?</p>
+          <span class="btn-row"><button type="button" class="btn btn-sm btn-danger-solid" data-acct-remove-confirm="{{ r.username }}">Remove</button><button type="button" class="btn btn-sm btn-ghost" data-acct-remove-cancel="{{ r.username }}">Cancel</button></span>
+        </div>
+      </article>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <section class="card">{{ m.empty("No accounts attached", "Attach your own account and a reference or competitor account below (or list them in config.toml under [accounts]).", "@") }}</section>
+  {% endif %}
+</section>
+
+<div class="callout callout-row" data-readonly-note>
+  <span class="sev-icon sev-info" aria-hidden="true">i</span>
+  <div>
+    <p class="callout-title">Read-only view</p>
+    <p>Open the dashboard with <code>reel dashboard --open</code> to attach and import here, or use <code>reel accounts attach &lt;username&gt; --role reference</code> and <code>reel accounts import &lt;username&gt; --file posts.csv</code>.</p>
+  </div>
+</div>
+
+<div class="grid grid-12" data-write-only>
+  <section class="card" aria-labelledby="attach-h">
+    <div class="card-head card-head-stack">
+      <h2 id="attach-h">Attach account</h2>
+      <p class="card-sub">Public Business or Creator accounts only.</p>
+    </div>
+    <form class="form" data-acct-attach novalidate>
+      <div class="field">
+        <label class="field-label" for="acct-user">Username</label>
+        <span class="affix"><span class="affix-pre" aria-hidden="true">@</span><input class="input input-mono" id="acct-user" name="username" dir="ltr" autocomplete="off" autocapitalize="none" spellcheck="false" required maxlength="31" aria-describedby="acct-user-err acct-user-hint"></span>
+        <p class="field-error" id="acct-user-err" data-acct-user-error></p>
+        <p class="field-hint" id="acct-user-hint">Letters, numbers, dots and underscores.</p>
+      </div>
+      <div class="field">
+        <label class="field-label" for="acct-role">Role</label>
+        <span class="select">
+          <select class="input" id="acct-role" name="role">
+            <option value="reference">Reference · learn from it</option>
+            <option value="competitor">Competitor · watch it</option>
+            <option value="own">Own · my account</option>
+          </select>
+        </span>
+      </div>
+      <div class="form-foot">
+        <p class="form-status" role="status" aria-live="polite" data-acct-attach-status></p>
+        <button type="submit" class="btn btn-primary">Attach</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card" id="acct-import" aria-labelledby="import-h">
+    <div class="card-head card-head-stack">
+      <h2 id="import-h">Manual import</h2>
+      <p class="card-sub">Paste reel links with their numbers, or choose a CSV. Re-importing the same link updates it. Nothing is fetched from Instagram.</p>
+    </div>
+    <form class="form" data-acct-import novalidate>
+      <div class="acct-import">
+        <div class="form">
+          <div class="field">
+            <label class="field-label" for="imp-acct">Account</label>
+            <span class="select">
+              <select class="input" id="imp-acct" name="username" data-acct-import-select>
+                {% for r in A.rows %}<option value="{{ r.username }}">@{{ r.username }}</option>{% endfor %}
+              </select>
+            </span>
+          </div>
+          <div class="field">
+            <label class="field-label" for="imp-paste">Paste rows</label>
+            <textarea class="input input-mono" id="imp-paste" name="rows" dir="ltr" rows="6" spellcheck="false" aria-describedby="imp-format imp-paste-err"></textarea>
+            <p class="field-error" id="imp-paste-err" data-acct-import-error></p>
+          </div>
+          <p class="or-rule">or</p>
+          <div class="field">
+            <label class="field-label" for="imp-file">CSV file</label>
+            <input class="file-input" id="imp-file" name="file" type="file" accept=".csv,text/csv" aria-describedby="imp-format" data-acct-import-file>
+          </div>
+        </div>
+        <div>
+          <p class="kpi-label">Format</p>
+          <pre class="acct-format" id="imp-format">One reel per line, separated by | :
+link | posted (YYYY-MM-DD HH:MM) | likes | comments | views | length (s) | caption
+
+instagram.com/reel/DEMO123 | 2026-10-08 21:00 | 912 | 44 | 18400 | 32 | <bdi dir="rtl" lang="ar">3 أسئلة لازم تسألها</bdi>
+instagram.com/reel/DEMO124 | 2026-10-10 18:30 | 401 | 12 | 9100</pre>
+          <p class="field-hint">Only the link is required (with or without the web prefix). Or a CSV with a header row: <code>{{ A.csv_columns }}</code>.</p>
+        </div>
+      </div>
+      <div class="form-foot">
+        <p class="form-status" role="status" aria-live="polite" data-acct-import-status></p>
+        <button type="submit" class="btn btn-primary">Import</button>
+      </div>
+    </form>
+  </section>
+</div>
+
+<section class="section" aria-labelledby="an-h">
+  <div class="section-head">
+    <h2 id="an-h">Analysis</h2>
+    <p class="section-sub">{% if A.analysis %}The brain's latest read, {{ clock.dt(A.created) }}. It runs with the weekly job (or <code>reel accounts analyze</code>) and feeds the filming brief. Times in Asia/Riyadh.{% else %}Runs with the weekly job once posts are imported, or now with <code>reel accounts analyze</code>.{% endif %}</p>
+  </div>
+  {% if A.analysis %}
+  {% if A.analysis.summary %}<div class="callout"{{ A.analysis.summary|langattrs }}><span class="kpi-label">Summary</span><p dir="auto">{{ A.analysis.summary }}</p></div>{% endif %}
+  {% if A.analysis.ideas %}
+  <div class="card acct-ideas-box">
+    <p class="kpi-label">Ideas for this week's brief</p>
+    <ul class="acct-ideas">{% for i in A.analysis.ideas %}<li><span{{ i.idea|langattrs }}>{{ i.idea }}</span> <span class="chip chip-sm">{{ hook_names.get(i.hook_type) or (i.hook_type|human) }}</span> <span class="muted"{{ i.why|langattrs }}>{{ i.why }}</span></li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+  {% for r in A.rows if r.analysis %}
+  <article class="card acct-an" id="an-{{ r.username }}" aria-labelledby="an-{{ r.username }}-h">
+    <div class="card-head">
+      <h3 id="an-{{ r.username }}-h"><span class="mono">@{{ r.username }}</span> {{ role_chip(r.role) }} <span class="chip chip-sm mono">{{ r.pseudonym }}</span></h3>
+    </div>
+    {{ analysis_card(r.analysis, 'an-' ~ r.username, r.username, r.role, r.posts) }}
+  </article>
+  {% endfor %}
+  {% if A.own_analysis %}
+  <article class="card acct-an" id="an-own" aria-labelledby="an-own-h">
+    <div class="card-head"><h3 id="an-own-h">Your reels in the engine <span class="chip chip-sm mono">OWN</span></h3></div>
+    {{ analysis_card(A.own_analysis, 'an-own', 'own', 'own', none) }}
+  </article>
+  {% endif %}
+  {% else %}
+  <section class="card">{{ m.empty("No analysis yet", "Attach accounts and import some of their public reels; the weekly job then analyses topics, hooks, formats, lengths and posting times.", "⌕") }}</section>
+  {% endif %}
+</section>
+{% endblock %}

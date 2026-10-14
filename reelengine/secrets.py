@@ -17,7 +17,8 @@ SERVICE = os.environ.get("REELENGINE_KEYRING_SERVICE", "ReelEngine")  # tests us
 ACCESS_TOKEN = "ig_access_token"  # nosec B105 - the NAME of a keyring entry, not a secret
 APP_SECRET = "ig_app_secret"  # nosec B105 - keyring entry name
 TELEGRAM_TOKEN = "telegram_bot_token"  # nosec B105 - keyring entry name
-KNOWN_NAMES = (ACCESS_TOKEN, APP_SECRET, TELEGRAM_TOKEN)
+FB_DISCOVERY_TOKEN = "fb_discovery_token"  # nosec B105 - keyring entry name (only if accounts.discovery = "facebook_login")
+KNOWN_NAMES = (ACCESS_TOKEN, APP_SECRET, TELEGRAM_TOKEN, FB_DISCOVERY_TOKEN)
 
 log = get_logger("secrets")
 

@@ -22,8 +22,17 @@ All commands run from the project folder in PowerShell; `reel` means `.venv\Scri
 | `reel brief [--now] [--json]` | This week's filming brief (`--now` writes a new one: 1 brain call) |
 | `reel review [--now] [--json]` | Current playbook plus bandit stats (`--now` runs the weekly learning review: 1 brain call) |
 | `reel doctor [--live] [--probe-container] [--json]` | Health checks. `--live` adds read-only Instagram checks (token, account type, quota, metric support, skip-rate unit); `--probe-container` also settles the container-host VERIFY with an unpublished test container |
-| `reel dashboard [--open] [--port N] [--build-only]` | Build and serve the dashboard on 127.0.0.1 (default port 8765) |
-| `reel dashboard --demo --open` | The same with clearly labelled demo data (separate DB) |
+| `reel dashboard [--open] [--port N] [--build-only] [--read-only]` | Build and serve the dashboard on 127.0.0.1 (default port 8765). With `[dashboard] allow_writes = true` (default) it also offers **Upload clip** and the Calendar/Accounts edits through a CSRF-protected local API; `--read-only` turns all of that off |
+| `reel dashboard --demo --open` | The same with clearly labelled demo data (separate DB). Calendar/Accounts edits go to the demo DB; uploads are off |
+| `reel calendar list \| upcoming [--days N] [--json]` | The Saudi occasions calendar; `upcoming` = the next N days (default 21), with Hijri dates and film-by dates |
+| `reel calendar add --name-ar … --name-en … --rule gregorian\|hijri\|once --month M --day D [--year Y] --category … [--official yes\|no] [--angle …] [--source-url https://…] [--checked-on YYYY-MM-DD] [--keywords "a, b"]` | Add a day. Hijri days are converted with Umm al-Qura (±1 day: moon sighting) |
+| `reel calendar edit --slug <id> [any field]` / `reel calendar delete --slug <id>` | Edit or delete (a deleted seed day stays deleted on reseed) |
+| `reel calendar seed` | Load `occasions.yaml` from the brand pack (else `brand/occasions.yaml`); only adds days the DB has never seen |
+| `reel accounts list \| attach <user> --role own\|reference\|competitor \| forget <user>` | Attached Instagram accounts. `forget` deletes the account and every stored post now |
+| `reel accounts import [<user>] --file posts.csv\|posts.txt` | Manual import (public numbers you copied): CSV header `username,permalink,posted_at,media_type,caption,likes,comments,views,duration_s`, or lines `link \| YYYY-MM-DD HH:MM \| likes \| comments \| views \| seconds \| caption` |
+| `reel accounts analyze [--json]` | The brain analyses the attached accounts (1 call, pseudonymised, counted in the daily cap). The weekly job does this automatically when posts exist |
+| `reel accounts prune` | Apply retention now (captions after `retention_days`, rows after `metrics_retention_days`); the daily job does it too |
+| `reel accounts fetch [<user>]` | Business Discovery. **Refuses** unless `[accounts] discovery = "facebook_login"` with a Facebook-Login token (see API_NOTES). Never runs on a schedule |
 | `reel connect [--stdin]` | Hidden-input token setup, verified with `/me`, stored in keyring |
 | `reel refresh-token [--json]` | Refresh the 60-day token now (the weekly job does this automatically) |
 | `reel secret set <name> --stdin` | Store a secret (used by `scripts/set-secret.ps1`) |
@@ -42,6 +51,10 @@ All commands run from the project folder in PowerShell; `reel` means `.venv\Scri
 | Posted something wrong | Delete it in the Instagram app (the API can't edit or delete Reels). Then `reel pause` and investigate with `reel show <id>` |
 | Brand copy corrected in the vault | `.venv\Scripts\python.exe scripts\build_brand.py` |
 | Nothing happens | `reel status` → `reel doctor` → `Get-ScheduledTaskInfo -TaskName 'Brain - Reel Engine Tick'`; logs are in `data\logs\engine.log` |
+| Upload a clip from the browser | `reel dashboard --open` → Pipeline → **Upload a clip** (or the **Upload clip** button in the header). The file lands in the inbox and the next ticks take it in exactly like a OneDrive clip: stability check, sha256 dedupe, `data/raw`, every QA gate. Uploading never schedules or posts anything, and dry-run stays on. A clip you already uploaded is reported as a duplicate |
+| An upload fails | The message says why: wrong type (only .mp4/.mov/.m4v), too big (`[upload] max_mb`), not enough disk (`[upload] min_free_gb`), "reload the page" (the CSRF token changes when the dashboard restarts) |
+| An occasion is coming up | The daily job sends one reminder 3-21 days ahead; the weekly brief adds at most one or two occasion scripts and the occasion checklist. A reel about the occasion (its name or match words in the topic, hook, title or caption) is scheduled from `post_window_days` before the day to its last day |
+| A reel is held by `occasion.*` or `copy_guard` | `occasion.*`: the flag/Shahada/emblem/leader/religion rules or an occasion next to an offer (see `brand/gates_occasions.yaml`). `copy_guard`: the caption or hook copies a stored reference/competitor caption. Rewrite and re-film; these can't be approved away |
 | Restore a backup | Stop the tasks (below), copy `data\backups\engine-<stamp>.sqlite` over `data\engine.sqlite`, start the tasks |
 
 ## Scheduled tasks (Windows Task Scheduler)
@@ -62,7 +75,7 @@ Working folder: the project root. Settings: wake to run, start when available, n
 
 ## Secrets (Windows Credential Manager, keyring service "ReelEngine")
 - Connect Instagram: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\connect-instagram.ps1`
-- Any secret (`ig_access_token | ig_app_secret | telegram_bot_token`): `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\set-secret.ps1 -Name <name>`. The input is hidden and passed on stdin only; the script prints only "stored" or the error.
+- Any other secret (`ig_app_secret | telegram_bot_token | fb_discovery_token`; the Instagram token goes through `connect-instagram.ps1`): `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\set-secret.ps1 -Name <name>`. The input is hidden and passed on stdin only; the script prints only "stored" or the error.
 - Never paste a token into a command line, a file, `config.toml` or a chat. Tests use the service `ReelEngine-Test`.
 
 ## Notifications

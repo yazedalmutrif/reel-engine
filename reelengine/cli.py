@@ -404,14 +404,16 @@ def cmd_dashboard(cfg, a) -> int:
         if a.build_only:
             print(site)
             return 0
-        server.serve(cfg, site, port=a.port, open_browser=a.open, media_root=ddir)
+        api = None if a.read_only else server.make_api(cfg, dpath, site, demo=True)
+        server.serve(cfg, site, port=a.port, open_browser=a.open, media_root=ddir, api=api)
         return 0
     conn = _conn(cfg)
     site = dbuild.build_dashboard(cfg, conn)
     if a.build_only:
         print(site)
         return 0
-    server.serve(cfg, site, port=a.port, open_browser=a.open)
+    api = None if a.read_only else server.make_api(cfg, cfg.db_path, site)
+    server.serve(cfg, site, port=a.port, open_browser=a.open, api=api)
     return 0
 
 
@@ -471,6 +473,114 @@ def cmd_order(cfg, a) -> int:
     return 0
 
 
+# ------------------------------------------------------------------ calendar
+def _occ_fields(a) -> dict:
+    d = {}
+    for k in ("name_ar", "name_en", "rule", "month", "day", "year", "duration_days", "category", "angle", "notes", "source_url", "checked_on", "keywords"):
+        v = getattr(a, k, None)
+        if v is not None:
+            d[k] = v
+    if getattr(a, "official", None) is not None:
+        d["official"] = a.official == "yes"
+    return d
+
+
+def cmd_calendar(cfg, a) -> int:
+    from . import occasions as oc
+
+    conn = _conn(cfg)
+    try:
+        if a.action == "seed":
+            n = oc.ensure_seeded(conn, cfg)
+            print(f"added {n} seed occasions (existing edits and deletions are kept)")
+            return 0
+        if a.action == "list":
+            rows = oc.all_occasions(conn, include_demo=False)
+            _out(rows, a.json, "\n".join(
+                f"{o['slug']:<26} {o['rule']:<9} {(str(o['year']) + '-') if o['year'] else ''}{o['month']:02d}-{o['day']:02d}"
+                f"{' x' + str(o['duration_days']) + 'd' if o['duration_days'] > 1 else '':<6} {o['category']:<13} "
+                f"{'official' if o['official'] else 'unofficial':<10} {o['name_en']} / {o['name_ar']}" for o in rows) or "no occasions (reel calendar seed)")
+            return 0
+        if a.action == "upcoming":
+            items = oc.upcoming(conn, cfg, min_days=0, max_days=a.days, include_demo=False)
+            _out([x.as_dict() for x in items], a.json, "\n".join(
+                f"{x.start.isoformat()} (in {x.days_until} d){' ~' if x.approximate else ''}  {x.occasion['name_en']} / {x.occasion['name_ar']}"
+                f"{'  [' + x.hijri + ']' if x.hijri else ''}  film by {x.film_by.isoformat() if x.film_by else '-'}" for x in items) or f"nothing in the next {a.days} days")
+            return 0
+        if a.action == "add":
+            o = oc.add(conn, _occ_fields(a) | ({"slug": a.slug} if a.slug else {}))
+            print(f"added {o['slug']}")
+            return 0
+        if a.action == "edit":
+            if not a.slug:
+                raise oc.OccasionError("give the id: reel calendar edit --slug <id> ...")
+            o = oc.edit(conn, a.slug, _occ_fields(a))
+            print(f"updated {o['slug']}")
+            return 0
+        if a.action == "delete":
+            if not a.slug:
+                raise oc.OccasionError("give the id: reel calendar delete --slug <id>")
+            ok = oc.delete(conn, a.slug)
+            print(f"deleted {a.slug}" if ok else f"no occasion {a.slug}")
+            return 0 if ok else 1
+    except oc.OccasionError as exc:
+        print(f"calendar: {exc}", file=sys.stderr)
+        return 2
+    return 2
+
+
+# ------------------------------------------------------------------ accounts
+def cmd_accounts(cfg, a) -> int:
+    from . import accounts as ac
+
+    conn = _conn(cfg)
+    try:
+        if a.action == "list":
+            rows = ac.list_accounts(conn, include_demo=False)
+            _out(rows, a.json, "\n".join(f"@{r['username']:<24} {r['role']:<10} {r['pseudonym']:<7} {r['posts']:>3} posts  source {r['source']}"
+                                          for r in rows) or "no accounts attached (reel accounts attach <username> --role reference)")
+            return 0
+        if a.action == "attach":
+            r = ac.attach(conn, a.username or "", a.role, notes=a.notes or "")
+            print(f"attached @{r['username']} as {r['role']} ({r['pseudonym']})")
+            return 0
+        if a.action == "forget":
+            ok = ac.forget(conn, a.username or "")
+            if ok:
+                conn.execute("VACUUM")
+            print("forgotten: the account and all its stored posts were deleted" if ok else "not attached")
+            return 0 if ok else 1
+        if a.action == "import":
+            if not a.file:
+                raise ac.AccountError("give --file <csv or txt>")
+            text = Path(a.file).read_text(encoding="utf-8-sig")
+            rows = ac.parse_csv(text) if a.file.lower().endswith(".csv") else ac.parse_paste(text)
+            res = ac.import_rows(conn, cfg, rows, default_username=a.username)
+            _out(res, a.json, f"stored {res['stored']} posts for {', '.join('@' + u for u in res['accounts']) or 'nobody'}"
+                 + ("".join(f"\n  ! {e}" for e in res["errors"])))
+            return 0 if not res["errors"] else 1
+        if a.action == "analyze":
+            from .jobs import engine_lock
+
+            with engine_lock(cfg):
+                out = ac.analyze(cfg, conn)
+            _out(out, a.json, out["summary"] + "\n" + "\n".join(f"- {i['idea']} ({i['hook_type']})" for i in out["ideas"]))
+            return 0
+        if a.action == "prune":
+            _out(ac.prune(conn, cfg), a.json)
+            return 0
+        if a.action == "fetch":
+            src = ac.BusinessDiscoverySource(cfg, conn)
+            targets = [a.username] if a.username else [r["username"] for r in ac.list_accounts(conn, include_demo=False) if r["role"] != "own"]
+            for u in targets:
+                print(src.sync(u))
+            return 0
+    except ac.AccountError as exc:
+        print(f"accounts: {exc}", file=sys.stderr)
+        return 2
+    return 2
+
+
 # ------------------------------------------------------------------ parser
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="reel", description="Reel Engine: autonomous Instagram Reels pipeline (dry-run by default).")
@@ -523,6 +633,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--port", type=int)
     sp.add_argument("--demo", action="store_true", help="serve the clearly-labelled demo data instead")
     sp.add_argument("--build-only", action="store_true")
+    sp.add_argument("--read-only", action="store_true", help="no upload button or edits (no POST routes)")
     sp = add("connect", cmd_connect, "store + verify the Instagram token (hidden input)", json_flag=False)
     sp.add_argument("--stdin", action="store_true")
     add("refresh-token", cmd_refresh_token, "refresh the 60-day token now")
@@ -530,6 +641,30 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("action", choices=["set"])
     sp.add_argument("name", choices=list(secrets.KNOWN_NAMES))
     sp.add_argument("--stdin", action="store_true")
+    sp = add("calendar", cmd_calendar, "Saudi occasions calendar: list | upcoming | add | edit | delete | seed")
+    sp.add_argument("action", choices=["list", "upcoming", "add", "edit", "delete", "seed"])
+    sp.add_argument("--slug", help="the occasion id (edit/delete; optional for add)")
+    sp.add_argument("--name-ar", dest="name_ar")
+    sp.add_argument("--name-en", dest="name_en")
+    sp.add_argument("--rule", choices=["gregorian", "hijri", "once"])
+    sp.add_argument("--month", type=int)
+    sp.add_argument("--day", type=int)
+    sp.add_argument("--year", type=int, help="only for --rule once")
+    sp.add_argument("--duration-days", dest="duration_days", type=int)
+    sp.add_argument("--category", choices=["national", "religious", "international", "tech", "career"])
+    sp.add_argument("--official", choices=["yes", "no"])
+    sp.add_argument("--angle")
+    sp.add_argument("--notes")
+    sp.add_argument("--source-url", dest="source_url")
+    sp.add_argument("--checked-on", dest="checked_on", help="YYYY-MM-DD")
+    sp.add_argument("--keywords", help="comma-separated extra words that tag a reel as about this day")
+    sp.add_argument("--days", type=int, default=21, help="upcoming: how many days ahead (default 21)")
+    sp = add("accounts", cmd_accounts, "attached Instagram accounts: list | attach | forget | import | analyze | prune | fetch")
+    sp.add_argument("action", choices=["list", "attach", "forget", "import", "analyze", "prune", "fetch"])
+    sp.add_argument("username", nargs="?", help="Instagram username (with or without @)")
+    sp.add_argument("--role", choices=["own", "reference", "competitor"], default="reference")
+    sp.add_argument("--notes")
+    sp.add_argument("--file", help="import: a .csv (header: username,permalink,posted_at,media_type,caption,likes,comments,views,duration_s) or a .txt of pasted lines")
     sp = add("order", cmd_order, "record a manual order (Money tab)", json_flag=False)
     sp.add_argument("amount", type=float)
     sp.add_argument("--item", default="")
