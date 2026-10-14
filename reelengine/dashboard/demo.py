@@ -649,6 +649,7 @@ def seed_demo(db_path: Path, cfg, thumbs_dir: Path, now: datetime | None = None)
                               1_350_000 - back * 21_000, "Reel Engine Backups (demo)", 1))
         conn.execute("INSERT INTO orders(day, amount_sar, item, note, created_at, is_demo) VALUES(?,?,?,?,?,1)",
                      ((today - timedelta(days=3)).isoformat(), 0.0, "Test order (demo)", "Layout check only, not a sale", _iso(now - timedelta(days=3))))
+        _seed_calendar_accounts(conn, cfg, now, today, rnd)
         db.meta_set(conn, "demo", "1")
         db.meta_set(conn, "demo_seeded_at", _iso(now))
     conn.close()
@@ -657,3 +658,71 @@ def seed_demo(db_path: Path, cfg, thumbs_dir: Path, now: datetime | None = None)
     for r in reels:
         if r.get("thumb_path"):
             _thumb(thumbs_dir / r["thumb_path"], r["id"], r.get("_pillar") or "", cfg.fonts_dir)
+
+
+DEMO_ACCOUNTS = (
+    ("demo_own_reels", "own", "Demo: stands in for the owner's account"),
+    ("demo_ai_tips", "reference", "Demo: fictional AI-tools creator"),
+    ("demo_career_coach", "competitor", "Demo: fictional career-advice creator"),
+)
+DEMO_CAPTIONS = (
+    "3 أدوات ذكاء اصطناعي تختصر عليك ساعات في المذاكرة #ai",
+    "وش تكتب في أول سطر من السيرة الذاتية؟ جرب هالطريقة",
+    "قصتي مع أول مقابلة تقنية وش تعلمت منها",
+    "قبل وبعد: بروفايل لينكدان لخريج جديد",
+    "سؤال: وش أصعب شي واجهك في البحث عن وظيفة؟",
+    "شرح سريع: كيف تسوي بورتفوليو بدون خبرة",
+)
+
+
+def _seed_calendar_accounts(conn, cfg, now: datetime, today: date, rnd) -> None:
+    """Demo occasions (the real seed, marked demo, plus two made-up days near today), demo accounts with
+    fictional posts, one demo analysis, and two demo uploads. Every row is flagged is_demo."""
+    from .. import occasions as oc
+
+    for o in oc.load_seed(oc.seed_path(cfg)):
+        oc._insert(conn, o, origin="seed", is_demo=True)
+    for k, (slug, en, ar, cat) in enumerate((("demo-hackathon-day", "Demo: University hackathon", "تجريبي: هاكاثون الجامعة", "tech"),
+                                             ("demo-career-fair", "Demo: Career fair", "تجريبي: معرض التوظيف", "career"))):
+        d = today + timedelta(days=6 + k * 9)
+        oc._insert(conn, {"slug": slug, "name_ar": ar, "name_en": en, "rule": "once", "year": d.year, "month": d.month, "day": d.day,
+                          "duration_days": 1 + k, "category": cat, "official": False, "angle": "Demo angle: what to prepare before you go.",
+                          "notes": "Demo row for layout review.", "source_url": "https://example.com/demo", "checked_on": today.isoformat(),
+                          "keywords": []}, origin="user", is_demo=True)
+    names = {}
+    for k, (u, role, note) in enumerate(DEMO_ACCOUNTS):
+        cur = conn.execute("INSERT INTO accounts(username, pseudonym, role, source, notes, added_at, is_demo, followers, media_count) VALUES(?,?,?,?,?,?,1,?,?)",
+                           (u, f"ACC_{k + 1:02d}", role, "manual", note, _iso(now - timedelta(days=12 - k)), 1200 * (k + 1), 40 + k * 15))
+        names[u] = cur.lastrowid
+        for j in range(8 if role != "own" else 5):
+            posted = now - timedelta(days=2 + j * 3, hours=rnd.randint(0, 6))
+            conn.execute("INSERT INTO account_media(account_id, media_key, permalink, posted_at, media_type, caption, likes, comments, views, duration_s, source, fetched_at) "
+                         "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                         (cur.lastrowid, f"manual:demo{k}{j}", None, _iso(posted), "REELS", DEMO_CAPTIONS[(j + k) % len(DEMO_CAPTIONS)] + " (demo)",
+                          rnd.randint(40, 900), rnd.randint(2, 60), rnd.randint(800, 30000), float(rnd.choice((22, 28, 35, 41, 55))), "manual",
+                          _iso(now - timedelta(days=1))))
+    analysis = {
+        "summary": "Demo analysis: list and question hooks under 35 s led on both reference accounts; evenings after 21:00 did best.",
+        "accounts": [
+            {"account": "ACC_02", "topics": ["AI study tools", "prompt tips"], "hook_types": ["list_number", "question"], "formats": ["talking head", "screen recording"],
+             "typical_length": "25-35 s", "best_times": ["Sun-Tue 21:00"], "performing": [{"post": "ACC_02-P1", "why": "Numbered list with a concrete payoff in the first line."}],
+             "summary": "Short numbered tool lists; screen recordings in the middle.", "confidence": "medium"},
+            {"account": "ACC_03", "topics": ["CV writing", "interviews"], "hook_types": ["story", "pov_before_after"], "formats": ["story time", "before/after"],
+             "typical_length": "35-55 s", "best_times": ["Thu 22:00"], "performing": [{"post": "ACC_03-P2", "why": "Before/after of a real CV line."}],
+             "summary": "Longer story reels; before/after edits get the saves.", "confidence": "low"},
+            {"account": "OWN", "topics": ["AI tools", "job hunt"], "hook_types": ["problem", "list_number"], "formats": ["talking head"],
+             "typical_length": "30-45 s", "best_times": ["weekday 21:30"], "performing": [], "summary": "Demo: too few own posts to judge.", "confidence": "low"},
+        ],
+        "ideas": [
+            {"idea": "3 AI tools that turn lecture notes into flashcards, each shown on screen for 5 seconds.", "hook_type": "list_number", "why": "List hooks led ACC_02."},
+            {"idea": "Before/after of one CV bullet rewritten with numbers.", "hook_type": "pov_before_after", "why": "Before/after got saves on ACC_03."},
+            {"idea": "Ask: which interview question froze you? Then answer the top one next week.", "hook_type": "question", "why": "Question hooks drew comments on ACC_02."},
+        ],
+    }
+    conn.execute("INSERT INTO account_analyses(created_at, json, stats_json) VALUES(?,?,?)",
+                 (_iso(now - timedelta(hours=20)), db.jdump(analysis), db.jdump({"stats": [], "own": {}})))
+    for k, rid in enumerate((1, 2)):
+        r = conn.execute("SELECT sha256 FROM reels WHERE id=?", (rid,)).fetchone()
+        if r:
+            conn.execute("INSERT INTO uploads(created_at, original_name, stored_name, size_bytes, sha256, status) VALUES(?,?,?,?,?,?)",
+                         (_iso(now - timedelta(hours=30 - k * 5)), f"demo-clip-{k + 1}.mov", f"demo-clip-{k + 1}.mov", 48_000_000 + k * 9_000_000, r["sha256"], "queued"))

@@ -6,11 +6,13 @@
 <meta http-equiv="Content-Security-Policy" content="{{ csp }}">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark">
+<meta name="darkreader-lock">
 <title>{{ page_label }} · Reel Engine{% if demo %} (demo){% endif %}</title>
 <link rel="icon" href="{{ root }}assets/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="{{ root }}assets/app.css">
+<script src="{{ root }}assets/app.js" defer></script>
 </head>
-<body class="page-{{ page }}">
+<body class="page-{{ page }}"{% if demo %} data-demo="1"{% endif %} data-root="{{ root }}">
 <a class="skip" href="#main">Skip to content</a>
 {% if demo %}
 <div class="demo-banner" role="note"><span class="demo-tag">DEMO DATA:</span> fake reels for layout review, nothing here is real</div>
@@ -23,6 +25,7 @@
     </a>
     <div class="top-meta">
       <span class="badge badge-{{ mode.badge.sev }}" title="Engine mode"><span class="badge-icon" aria-hidden="true">{{ mode.badge.icon }}</span>{{ mode.badge.text }}</span>
+      <a class="btn upl-top" href="{{ root }}pipeline.html#upload" data-write-only><span class="btn-icon" aria-hidden="true">⇡</span>Upload clip</a>
       <span class="updated"><span class="updated-label">Updated</span> <time datetime="{{ updated_iso }}">{{ updated }}</time> <span class="tz">{{ tz_name }}</span></span>
     </div>
   </div>
@@ -36,7 +39,7 @@
 {% block main %}{% endblock %}
 </main>
 <footer class="wrap foot">
-  <p>Reel Engine dashboard · read-only · served on this computer only{% if demo %} · <strong>demo data</strong>{% endif %}</p>
+  <p>Reel Engine dashboard · <span data-readonly-note>read-only</span><span data-write-only>uploads and edits on (this computer only)</span> · served on this computer only{% if demo %} · <strong>demo data</strong>{% endif %}</p>
   <p>Mode <span class="mono">{{ mode.mode }}</span>{% if mode.paused %} · publishing paused{% endif %} · times in {{ tz_name }}</p>
 </footer>
 </body>

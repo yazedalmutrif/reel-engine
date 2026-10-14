@@ -37,7 +37,7 @@ STATIC = HERE / "static"
 
 CSP = (
     "default-src 'none'; style-src 'self'; img-src 'self' data:; font-src 'self'; media-src 'self'; "
-    "script-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    "script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 )
 DEMO_BANNER = "DEMO DATA: fake reels for layout review, nothing here is real"
 
@@ -47,6 +47,8 @@ PAGES = (
     ("reels", "Reels"),
     ("learning", "Learning"),
     ("brief", "Brief"),
+    ("calendar", "Calendar"),
+    ("accounts", "Accounts"),
     ("health", "Health"),
     ("money", "Money"),
 )
@@ -988,7 +990,116 @@ def collect(cfg, conn: sqlite3.Connection, demo: bool, now: datetime) -> dict:
     orders = _rows(conn, "SELECT day, amount_sar, item, note, created_at, is_demo FROM orders" + ("" if demo else " WHERE is_demo=0") + " ORDER BY day DESC, id DESC")  # nosec B608 - constant clause
     ctx["orders"] = orders
     ctx["orders_total"] = sum(_num(o["amount_sar"]) or 0 for o in orders)
+
+    collect_calendar(ctx, cfg, conn, demo, today)
+    collect_accounts(ctx, cfg, conn, demo)
+    from .api import resolve_uploads
+
+    ctx["uploads"] = resolve_uploads(conn, cfg.inbox)
+    ctx["upload_max_mb"] = int(cfg.get("upload.max_mb", 2048))
+    ctx["upload_exts"] = ", ".join(e for e in cfg["intake"]["extensions"] if e in (".mp4", ".mov", ".m4v"))
     return ctx
+
+
+CATEGORY_LABELS = {"national": "National", "religious": "Religious", "international": "International", "tech": "Tech", "career": "Career"}
+RULE_LABELS = {"gregorian": "Every year (Gregorian)", "hijri": "Every year (Hijri, Umm al-Qura)", "once": "One-off date"}
+
+
+def _no_scheme(url: str) -> str:
+    """Source links are shown as copyable text: the static site carries no external URLs."""
+    return re.sub(r"^https?://", "", str(url or ""))
+
+
+def collect_calendar(ctx: dict, cfg, conn: sqlite3.Connection, demo: bool, today) -> None:
+    from .. import occasions as oc
+
+    occs = oc.all_occasions(conn, include_demo=demo) if _table_exists(conn, "occasions") else []
+    if not demo:
+        occs = [o for o in occs if not o.get("is_demo")]
+    lo, hi = int(cfg.get("calendar.lookahead_min_days", 3)), int(cfg.get("calendar.lookahead_max_days", 21))
+    lead = int(cfg.get("calendar.film_lead_days", 3))
+
+    def view(x) -> dict:
+        d = x.as_dict()
+        d["source_text"] = _no_scheme(d["source_url"])
+        d["cat_label"] = CATEGORY_LABELS.get(d["category"], d["category"])
+        return d
+
+    soon = [view(x) for x in oc.between(occs, today, today + timedelta(days=hi), today, lead)]
+    months = []
+    y, m = today.year, today.month
+    for _ in range(3):
+        first = today.replace(year=y, month=m, day=1)
+        last = (first.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+        grid = oc.month_grid(y, m, oc.between(occs, first - timedelta(days=7), last + timedelta(days=7), today, lead), today)
+        agenda = []
+        for wk in grid["weeks"]:
+            for cell in wk:
+                items = [{"slug": x.occasion["slug"], "name_en": x.occasion["name_en"], "name_ar": x.occasion["name_ar"],
+                          "category": x.occasion["category"], "first": x.start == cell["date"], "hijri": x.hijri} for x in cell["items"]]
+                cell["items"] = items
+                cont = [it for it in items if not it["first"]]
+                cell["cont"] = cont[0]["category"] if cont and not any(it["first"] for it in items) else ""
+                if cell["in_month"]:
+                    for it in items:
+                        if it["first"]:
+                            agenda.append({**it, "date": cell["date"].isoformat(), "label": cell["date"].strftime("%a %d"), "today": cell["today"]})
+        grid["agenda"] = agenda
+        months.append(grid)
+        m += 1
+        if m == 13:
+            y, m = y + 1, 1
+    rows = []
+    year_ahead: dict = {}
+    for x in oc.between(occs, today, today + timedelta(days=400), today, lead):  # sorted by date: keep the first
+        year_ahead.setdefault(x.occasion["slug"], x)
+    for o in occs:
+        nxt = year_ahead.get(o["slug"])
+        rows.append({**o, "source_text": _no_scheme(o.get("source_url")), "cat_label": CATEGORY_LABELS.get(o["category"], o["category"]),
+                     "rule_label": RULE_LABELS.get(o["rule"], o["rule"]),
+                     "date_text": (f"{o['year']}-{o['month']:02d}-{o['day']:02d}" if o["rule"] == "once"
+                                   else (f"{o['day']} {oc.HIJRI_MONTHS_EN[o['month'] - 1]}" if o["rule"] == "hijri"
+                                         else datetime(2028, o["month"], o["day"]).strftime("%d %b"))),
+                     "next": nxt.start.isoformat() if nxt else None, "next_days": nxt.days_until if nxt else None,
+                     "keywords_text": ", ".join(o.get("keywords") or []),
+                     "json": json.dumps({k: o.get(k) for k in ("slug", "name_ar", "name_en", "rule", "month", "day", "year", "duration_days",
+                                                               "category", "official", "angle", "notes", "source_url", "checked_on")}
+                                        | {"keywords": ", ".join(o.get("keywords") or []), "source_url": _no_scheme(o.get("source_url"))},
+                                        ensure_ascii=False)})
+    rows.sort(key=lambda r: (r["next"] or "9999", r["slug"]))
+    ctx["calendar"] = {
+        "soon": soon, "window": [x for x in soon if lo <= x["days_until"] <= hi], "months": months, "rows": rows,
+        "lo": lo, "hi": hi, "lead": lead, "categories": CATEGORY_LABELS, "rules": RULE_LABELS,
+        "weekdays": ("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"),
+    }
+
+
+def collect_accounts(ctx: dict, cfg, conn: sqlite3.Connection, demo: bool) -> None:
+    from .. import accounts as ac
+
+    if not _table_exists(conn, "accounts"):
+        ctx["accounts"] = {"rows": [], "analysis": None, "by_acc": {}, "stats": {}}
+        return
+    rows = ac.list_accounts(conn, include_demo=demo)
+    if not demo:
+        rows = [r for r in rows if not r.get("is_demo")]
+    for r in rows:
+        r["last_import_t"] = _ts(r.get("last_import"))
+        r["added_t"] = _ts(r.get("added_at"))
+    an = ac.latest_analysis(conn)
+    by_acc = {a["account"]: a for a in (an or {}).get("accounts", [])} if an else {}
+    stats = {s["account"]: s for s in ((an or {}).get("stats", {}) or {}).get("stats", [])} if an else {}
+    for r in rows:
+        r["analysis"] = by_acc.get(r["pseudonym"])
+        r["stats"] = stats.get(r["pseudonym"])
+    ctx["accounts"] = {
+        "rows": rows, "analysis": an, "created": _ts(an["created_at"]) if an else None,
+        "own_analysis": by_acc.get("OWN"),
+        "retention_days": int(cfg.get("accounts.retention_days", 90)),
+        "metrics_retention_days": int(cfg.get("accounts.metrics_retention_days", 180)),
+        "discovery": cfg.get("accounts.discovery", "off"),
+        "csv_columns": ",".join(ac.CSV_COLUMNS),
+    }
 
 
 def _last_kind(conn: sqlite3.Connection, kind: str) -> dict | None:
