@@ -33,7 +33,7 @@ episodes:
 - id: E-4
   topic: cv_method
   pillar_title: CV method → Conversion
-  text: نقطة وحدة في السيرة قبل وبعد: ابدأ بفعل، وحط نتيجة حقيقية
+  text: 'نقطة وحدة في السيرة قبل وبعد: ابدأ بفعل، وحط نتيجة حقيقية'
   draws_on: example
   draft: false
   blocked: false

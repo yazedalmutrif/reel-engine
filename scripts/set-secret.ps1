@@ -26,7 +26,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [ValidateSet('ig_app_secret', 'telegram_bot_token')]
+    [ValidateSet('ig_app_secret', 'telegram_bot_token', 'fb_discovery_token')]
     [string]$Name,
 
     [switch]$TestService,
