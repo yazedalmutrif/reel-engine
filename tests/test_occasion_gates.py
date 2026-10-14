@@ -105,3 +105,14 @@ def test_every_rule_has_reason_and_known_severity():
         assert r["severity"] in ("hold", "warn") and r["reason"]
         assert r["match"] in data["groups"] or r["match"].startswith("(") or r["match"] == "🇸🇦"
     assert len(data["filming_checklist"]) >= 8
+
+
+@pytest.mark.parametrize("missing", ["id", "match", "reason"])
+def test_pack_rule_missing_a_field_is_refused(tmp_path, missing):
+    from reelengine.gates import load_occasion_rules
+
+    rule = {"id": "pack_extra", "match": ["تخفيض"], "reason": "test rule"}
+    del rule[missing]
+    (tmp_path / "gates_occasions.yaml").write_text(yaml.safe_dump({"rules": [rule]}, allow_unicode=True), encoding="utf-8")
+    with pytest.raises(ValueError, match="needs id, match and reason"):
+        load_occasion_rules(tmp_path)

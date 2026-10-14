@@ -197,8 +197,11 @@ class WriteApi:
                     raise ApiError(404, "not attached")
                 res = {"ok": True}
                 try:
-                    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")  # deleted rows must not linger in the WAL ...
+                    busy = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()[0]  # deleted rows must not linger in the WAL ...
                     conn.execute("VACUUM")  # ... or in free pages (secure_delete is on in forget)
+                    if busy:  # a busy checkpoint doesn't raise: it reports busy=1 and leaves the WAL
+                        log.warning("WAL checkpoint after forget was busy; deferred")
+                        res["vacuum"] = "deferred"
                 except Exception as exc:  # noqa: BLE001 - a busy engine: the delete itself is committed
                     log.warning("VACUUM after forget deferred: %s", exc)
                     res["vacuum"] = "deferred"

@@ -261,3 +261,34 @@ def test_accounts_api(srv, conn):
 def test_body_cap_for_json(srv):
     r, _ = req(srv, "POST", "/api/accounts", b"{}", {"Content-Type": "application/json", "Content-Length": str(10 * 1024 * 1024)})
     assert r.status == 413
+
+
+class _ConnProxy:
+    """Wraps a real connection; makes VACUUM raise or the WAL checkpoint report busy."""
+
+    def __init__(self, real, *, vacuum_raises=False, checkpoint_busy=False):
+        self._real, self._vac, self._busy = real, vacuum_raises, checkpoint_busy
+
+    def execute(self, sql, *a):
+        s = sql.strip().upper()
+        if s == "VACUUM" and self._vac:
+            import sqlite3
+            raise sqlite3.OperationalError("database is locked")
+        if s.startswith("PRAGMA WAL_CHECKPOINT") and self._busy:
+            self._real.execute(sql, *a).fetchone()
+            return self._real.execute("SELECT 1, 0, 0")
+        return self._real.execute(sql, *a)
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+@pytest.mark.parametrize("kw", [{"vacuum_raises": True}, {"checkpoint_busy": True}])
+def test_forget_with_a_busy_db_is_deferred_not_an_error(cfg, conn, tmp_path, monkeypatch, kw):
+    api = WriteApi(cfg, cfg.db_path, tmp_path / "site")
+    from reelengine import accounts as ac
+    ac.attach(conn, "ref_two", "reference")
+    monkeypatch.setattr(api, "_conn", lambda: _ConnProxy(db.connect(cfg.db_path), **kw))
+    status, res = api.accounts({"action": "forget", "username": "ref_two"})
+    assert status == 200 and res["ok"] and res["vacuum"] == "deferred"
+    assert conn.execute("SELECT COUNT(*) FROM accounts WHERE username='ref_two'").fetchone()[0] == 0
