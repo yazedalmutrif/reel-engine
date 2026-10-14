@@ -33,7 +33,7 @@ from typing import Any, Iterator
 
 from .log import redact
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 STATES = (
     "new",
@@ -296,6 +296,85 @@ CREATE TABLE IF NOT EXISTS backups (
 """
 
 
+# v2 (2026-10-14): occasions calendar, attached accounts, dashboard uploads
+DDL_V2 = """
+CREATE TABLE IF NOT EXISTS occasions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  slug TEXT NOT NULL UNIQUE,
+  name_ar TEXT NOT NULL,
+  name_en TEXT NOT NULL,
+  rule TEXT NOT NULL,                -- gregorian (every year) | hijri (Umm al-Qura, every year) | once (one date)
+  month INTEGER NOT NULL,
+  day INTEGER NOT NULL,
+  year INTEGER,                      -- only for rule = once
+  duration_days INTEGER NOT NULL DEFAULT 1,
+  category TEXT NOT NULL,            -- national | religious | international | tech | career
+  official INTEGER NOT NULL DEFAULT 0,
+  angle TEXT,
+  notes TEXT,
+  source_url TEXT,
+  checked_on TEXT,
+  keywords_json TEXT,                -- extra match words for tagging reels (the names always match)
+  origin TEXT NOT NULL DEFAULT 'user',  -- seed | user
+  deleted INTEGER NOT NULL DEFAULT 0,   -- tombstone: a deleted seed day never comes back on reseed
+  is_demo INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS accounts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT NOT NULL UNIQUE,
+  pseudonym TEXT NOT NULL UNIQUE,    -- ACC_01...: the only name the brain ever sees (PDPL art. 29)
+  role TEXT NOT NULL,                -- own | reference | competitor
+  source TEXT NOT NULL DEFAULT 'manual',  -- manual | config | api
+  notes TEXT,
+  added_at TEXT NOT NULL,
+  last_fetched_at TEXT,
+  last_error TEXT,
+  followers INTEGER,
+  media_count INTEGER,
+  is_demo INTEGER NOT NULL DEFAULT 0
+);
+
+-- public posts of attached accounts: minimal fields, pruned after accounts.retention_days
+CREATE TABLE IF NOT EXISTS account_media (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  media_key TEXT NOT NULL,           -- IG media id, or a hash of the permalink for manual rows
+  permalink TEXT,
+  posted_at TEXT,
+  media_type TEXT,                   -- REELS | IMAGE | CAROUSEL | VIDEO | NULL
+  caption TEXT,
+  likes INTEGER,
+  comments INTEGER,
+  views INTEGER,
+  duration_s REAL,
+  source TEXT NOT NULL,              -- api | manual | csv
+  fetched_at TEXT NOT NULL,
+  UNIQUE(account_id, media_key)
+);
+
+CREATE TABLE IF NOT EXISTS account_analyses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at TEXT NOT NULL,
+  json TEXT NOT NULL,
+  stats_json TEXT
+);
+
+CREATE TABLE IF NOT EXISTS uploads (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at TEXT NOT NULL,
+  original_name TEXT,
+  stored_name TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  sha256 TEXT NOT NULL,
+  status TEXT NOT NULL,              -- queued | duplicate
+  duplicate_of INTEGER
+);
+"""
+
+
 class TransitionError(Exception):
     pass
 
@@ -333,8 +412,12 @@ def migrate(conn: sqlite3.Connection) -> None:
     ver = conn.execute("PRAGMA user_version").fetchone()[0]
     if ver < 1:
         conn.executescript(DDL)
-        conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
+        conn.execute("PRAGMA user_version=1")
         conn.execute("INSERT OR IGNORE INTO token_state(id, status) VALUES (1, 'missing')")
+        ver = 1
+    if ver < 2:
+        conn.executescript(DDL_V2)
+        conn.execute("PRAGMA user_version=2")
 
 
 @contextmanager

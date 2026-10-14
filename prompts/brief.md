@@ -29,6 +29,8 @@ Write exactly {{ slots|length }} scripts, one per slot below, in this order, wit
 - Naming a job platform, programme or employer requirement (e.g. LinkedIn, Jadarat, Taqat, Tamheer, Sabbar, Bayt, Glassdoor, stc TIP, Aramco, PIF, HRDF): add a `sources` entry for each, either a link copied from the trends list above, or the exact text "re-check on the official site before filming: <name>". You can't browse, so never invent a link.
 - Pick the CTA that fits the script: story → follow; list or checklist → save; a tip a friend needs → send; a genuine question to the audience → comment. Never a comment CTA that doesn't match the content.
 - Vary pillars across the week.
+- Occasions: if an upcoming occasion below fits the account, make at most ONE or TWO scripts about it and set `occasion` to its id (otherwise ""). Never force an occasion into a script, never pair an occasion with an offer, discount, giveaway or any CTA other than follow/save/send, and follow the occasion checklist. A Hijri date can move by a day, so the script must not depend on the exact day.
+- Account analysis: you may borrow a PATTERN from the ideas below (a hook type, a format), never a caption or another creator's words; own footage and Yazeed's own angle only.
 
 ## Inputs
 <data>
@@ -43,7 +45,16 @@ Episode ideas by pillar:
 
 Playbook rules:
 {{ rules }}
+
+Upcoming occasions (Saudi calendar, Asia/Riyadh):
+{{ occasions }}
+
+Account analysis (pseudonymised; patterns only):
+{{ accounts }}
 </data>
+
+## Occasion filming checklist (put the relevant points in the shot note of an occasion script)
+{{ occasion_checklist }}
 
 ## Verified facts about Yazeed
 {{ facts }}

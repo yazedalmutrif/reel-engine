@@ -1,0 +1,109 @@
+# National / religious occasion rules (added 2026-10-14, ruling by legal-compliance; NOT legal advice).
+# ADDITIVE to gates.yaml: nothing here loosens an existing rule, and the learner can't edit this file.
+# A brand pack may ship its own gates_occasions.yaml (brand_dir wins); otherwise this generic file is used.
+#
+# Matching runs on the same normalised text as gates.yaml (diacritics removed, أإآ→ا, ى→ي, ة→ه,
+# Arabic-Indic digits→0-9), case-insensitive. A rule matches `match`; with `near`, only when a `near`
+# hit is within `window` words (window 0 = anywhere in the same text). `fields` limits the rule to some
+# texts (captions = the burned-in spoken words, hook, title, caption, script).
+# severity: hold = hard fail (the reel is held) · warn = soft (shown to Yazeed and the critique)
+#
+# Sources (checked 2026-10-14): Flag Law (Royal Decree M/3, 1393H) art. 14-16 and 20 (secondary mirror
+# nezams.com/?p=1377); Ministry of Culture flag guide (1444H); Ministry of Commerce ban on commercial use of
+# the flag/Shahada, emblem and leaders' names and images (aawsat.com/node/3877641, 2022-09-16); Audiovisual
+# Media Law M/33 art. 5 (nezams.com/?p=895); MoC discount licence (okaz.com.sa/economy/na/2233268).
+groups:
+  OCC: '(اليوم الوطني|يوم الوطن|يوم التاسيس|يوم العلم|رمضان|العيد|عيد الفطر|عيد الاضحي|عيدكم مبارك|national day|founding day|flag day|ramadan|\beid\b)'
+  COM: '(خصم|خصومات|تخفيض|تخفيضات|عرض خاص|عروض|كود|كوبون|سعر خاص|بسعر|\d+ ?%|ريال|اطلب|احجز|سجل الحين|discount|\bsale\b|\boffer\b|promo|coupon|order now|book now)'
+  FLAG: '(العلم السعودي|علم السعوديه|علم المملكه|علم بلادي|رايه التوحيد|الرايه الخضراء|saudi flag|🇸🇦)'
+  SHAHADA: '(لا اله الا الله|محمد رسول الله|الشهادتين|كلمه التوحيد|\bshahada\b)'
+  EMBLEM: '(السيفين والنخله|النخله والسيفين|سيفين ونخله|شعار المملكه|شعار الدوله|saudi (royal )?emblem|coat of arms)'
+  LEADER: '(الملك سلمان|خادم الحرمين|ولي العهد|محمد بن سلمان|king salman|crown prince|\bmbs\b)'
+  REL: '(القران|سوره|المصحف|الصلاه|الصيام|الاذان|الحج|العمره|النبي|الرسول|الصحابه|\bquran\b|prophet)'
+  MOCK: '(نكته|نكت|ميم|ميمز|\bmemes?\b|طقطقه|استهبال|تحشيش|😂|🤣|\blol\b)'
+  IDENT: '(شعار اليوم الوطني|هويه اليوم الوطني|عزنا بطبعنا|شعار يوم التاسيس|هويه يوم التاسيس|national day logo|founding day logo)'
+  PRIZE: '(مسابقه|سحب|جوائز|giveaway|\bwin\b)'
+
+rules:
+  - id: occ_commercial
+    match: OCC
+    near: COM
+    window: 12
+    severity: hold
+    reason: occasion paired with a discount or offer (needs a Ministry of Commerce discount licence; service CTA is off)
+  - id: flag_commercial
+    match: FLAG
+    near: COM
+    window: 15
+    severity: hold
+    reason: no commercial or advertising use of the Saudi flag (Flag Law art. 15)
+  - id: flag_emoji_commercial
+    match: '🇸🇦'
+    near: COM
+    window: 0
+    fields: [caption]
+    severity: hold
+    reason: flag emoji in a caption that also has a price/offer (Flag Law art. 15)
+  - id: shahada_commercial
+    match: SHAHADA
+    near: COM
+    window: 20
+    severity: hold
+    reason: the Shahada may not be used in commercial dealings (Ministry of Commerce, 2022-09-16)
+  - id: emblem_any
+    match: EMBLEM
+    severity: hold
+    reason: the royal emblem is not for a personal account; commercial use banned (Ministry of Commerce)
+  - id: leader_commercial
+    match: LEADER
+    near: COM
+    window: 20
+    severity: hold
+    reason: leaders' names and images may not be used in commercial dealings (Ministry of Commerce)
+  - id: leader_mention
+    match: LEADER
+    severity: warn
+    reason: "human check: official photo only, respectful, no edits or memes (Audiovisual Media Law art. 5)"
+  - id: religion_mock
+    match: REL
+    near: MOCK
+    window: 8
+    severity: hold
+    reason: nothing that touches religion in a joke or meme (Audiovisual Media Law art. 5)
+  - id: quran_audio
+    match: '(قال تعالي|بسم الله الرحمن الرحيم|صدق الله العظيم|تلاوه|قران كريم)'
+    fields: [captions, script]
+    severity: warn
+    reason: "check: no background music under a recitation, and no comic or promo context"
+  - id: shahada_text
+    match: SHAHADA
+    fields: [hook, title, caption, script]
+    severity: warn
+    reason: "check: the Shahada is shown respectfully, unaltered, with no CTA nearby"
+  - id: flag_alter
+    match: '(عدلت|غيرت|ركبت|حطيت|اضفت|كتبت).{0,25}(علي|فوق) (العلم|الرايه)|flag with (my|our) logo|(my|our) logo on the flag'
+    severity: hold
+    reason: no words, logos or drawings added to the flag (Ministry of Culture flag guide)
+  - id: identity_logo
+    match: IDENT
+    severity: warn
+    reason: "use the official National Day / Founding Day identity file unchanged; check the GEA guide's terms; never in a promo"
+  - id: occ_giveaway
+    match: OCC
+    near: PRIZE
+    window: 12
+    severity: hold
+    reason: occasion giveaway or prize draw (may need a licence; also an engagement-bait risk)
+
+# Shown in the filming brief whenever an occasion is coming up (things text matching can't catch).
+filming_checklist:
+  - The flag never touches the floor, ground, water, a table or anything lower; never draped on a chair or used to hold or tie anything.
+  - The flag is clean, current design, upright, not mirrored, recoloured, cropped through the Shahada, AI-generated or overlaid with text or a logo.
+  - No flag, Shahada, emblem or leader image in any frame that has a price, product, service, CTA or another brand.
+  - No palm-and-swords emblem anywhere.
+  - Leader images only from official photos, with no edits, stickers, filters or face effects, never behind a comedy beat.
+  - Religious occasions: no Quran recitation over or next to music, none in a comic or promotional reel; no jokes about worship, fasting, prayer or the Prophet; nothing sectarian, tribal or mocking other countries.
+  - National identity logos only from the official GEA / Founding Day guide, unchanged, with no CTA in the same reel.
+  - Ramadan and Eid etiquette: modest dress, no showing off wealth, respectful timing.
+  - Teachers' Day / Boss's Day: no real teacher or manager named or shown without their OK; no internal work screens.
+  - Check which day it is before filming (Founding Day 22 Feb, National Day 23 Sep) and don't mix the two identities.

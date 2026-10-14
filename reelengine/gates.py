@@ -9,6 +9,9 @@ Rule files:
   brand/facts.yaml      verified facts + forbidden trap patterns (Accuracy Audit)
   brand/gates.yaml      engagement bait, guarantees, salary, fear, ads, reposts, service CTA
   brand/never_say.yaml  literal phrases from the brand copy's never-say list (generated)
+  brand/gates_occasions.yaml  national/religious occasion rules (flag, Shahada, emblem, leaders,
+                        religion, occasion + offer). Structured: match / near / window / severity.
+                        A brand pack's own copy wins; otherwise the generic file in brand/ applies.
 """
 from __future__ import annotations
 
@@ -73,15 +76,25 @@ class Brand:
     hooks: dict
     voice: str
     styles: dict
+    occasion_rules: dict = None  # type: ignore[assignment]
 
 
 def _yaml(path: Path) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
 
+GENERIC_BRAND = Path(__file__).resolve().parents[1] / "brand"
+
+
+def occasion_rules_path(brand_dir: Path) -> Path:
+    own = Path(brand_dir) / "gates_occasions.yaml"
+    return own if own.exists() else GENERIC_BRAND / "gates_occasions.yaml"
+
+
 @lru_cache(maxsize=4)
 def _load_brand_cached(brand_dir: str, stamp: tuple) -> Brand:
     d = Path(brand_dir)
+    orp = occasion_rules_path(d)
     return Brand(
         facts=_yaml(d / "facts.yaml"),
         gates=_yaml(d / "gates.yaml"),
@@ -90,12 +103,15 @@ def _load_brand_cached(brand_dir: str, stamp: tuple) -> Brand:
         hooks=_yaml(d / "hooks.yaml") if (d / "hooks.yaml").exists() else {},
         voice=(d / "voice.md").read_text(encoding="utf-8") if (d / "voice.md").exists() else "",
         styles=_yaml(d / "styles.yaml") if (d / "styles.yaml").exists() else {},
+        occasion_rules=_yaml(orp) if orp.exists() else {},
     )
 
 
 def load_brand(brand_dir: Path) -> Brand:
     files = ("facts.yaml", "gates.yaml", "never_say.yaml", "captions.yaml", "hooks.yaml", "voice.md", "styles.yaml")
     stamp = tuple((f, (brand_dir / f).stat().st_mtime if (brand_dir / f).exists() else 0) for f in files)
+    orp = occasion_rules_path(brand_dir)
+    stamp += ((str(orp), orp.stat().st_mtime if orp.exists() else 0),)
     return _load_brand_cached(str(brand_dir), stamp)
 
 
@@ -187,6 +203,39 @@ def check_legal(texts: dict[str, str], brand: Brand, service_enabled: bool) -> l
     return hits
 
 
+SEVERITY = {"hold": "hard", "warn": "soft"}
+
+
+def check_occasion_rules(texts: dict[str, str], rules: dict | None) -> list[Hit]:
+    """gates_occasions.yaml: `match` (a group name or a regex), optionally only `near` another
+    group within `window` words (0 = anywhere in the same text), optionally only in `fields`."""
+    hits: list[Hit] = []
+    if not rules:
+        return hits
+    groups = rules.get("groups") or {}
+    for field, raw in texts.items():
+        text = normalize(raw)
+        if not text.strip():
+            continue
+        for r in rules.get("rules") or []:
+            if r.get("fields") and field not in r["fields"]:
+                continue
+            pat = groups.get(r["match"], r["match"])
+            near = groups.get(r["near"], r["near"]) if r.get("near") else None
+            sev = SEVERITY.get(str(r.get("severity", "hold")), "hard")
+            for m in _find([pat], text):
+                if near is not None:
+                    window = int(r.get("window", 8))
+                    if window == 0:
+                        if not _find([near], text):
+                            continue
+                    elif not _near(text, m, [near], window):
+                        continue
+                hits.append(Hit("legal", f"occasion.{r['id']}", sev, r["reason"], field, m.group(0).strip()))
+                break
+    return hits
+
+
 def hashtags_of(caption: str) -> list[str]:
     return _HASHTAG.findall(caption or "")
 
@@ -225,6 +274,7 @@ def check_caption_limits(caption_json: dict, cfg, brand: Brand | None = None) ->
 def run_content_gates(texts: dict[str, str], caption_json: dict | None, cfg, brand: Brand) -> list[Hit]:
     hits = check_facts(texts, brand.facts)
     hits += check_legal(texts, brand, bool(cfg["cta"]["service_enabled"]))
+    hits += check_occasion_rules(texts, brand.occasion_rules)
     if caption_json is not None:
         hits += check_caption_limits(caption_json, cfg, brand)
     # de-duplicate (same rule + field)

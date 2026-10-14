@@ -24,7 +24,8 @@
           "cta_type": {"type": "string", "enum": ["follow", "save", "send", "comment", "none"]},
           "shot_note": {"type": "string", "maxLength": 240, "description": "Framing, light, place"},
           "experiment": {"type": "string", "maxLength": 120},
-          "sources": {"type": "array", "items": {"type": "string", "maxLength": 300}, "maxItems": 4, "description": "Links for any outside fact (programme requirements, dates), with the date checked"}
+          "sources": {"type": "array", "items": {"type": "string", "maxLength": 300}, "maxItems": 4, "description": "Links for any outside fact (programme requirements, dates), with the date checked"},
+          "occasion": {"type": "string", "maxLength": 63, "description": "id of the upcoming occasion this script is about, or empty"}
         }
       }
     },

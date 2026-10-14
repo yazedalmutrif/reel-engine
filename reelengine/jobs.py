@@ -65,7 +65,15 @@ def engine_lock(cfg) -> Iterator[None]:
 
 def open_db(cfg) -> sqlite3.Connection:
     setup_logging(cfg.dir("logs"))
-    return db.connect(cfg.db_path)
+    conn = db.connect(cfg.db_path)
+    from . import accounts, occasions
+
+    for fn in (occasions.ensure_seeded, accounts.sync_config):  # best effort: never block a job
+        try:
+            fn(conn, cfg)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("%s failed: %s", fn.__name__, exc)
+    return conn
 
 
 def _start(conn, kind: str) -> int:
@@ -272,6 +280,10 @@ def daily(cfg, toast: bool | None = None) -> dict:
             if free_gb < cfg["backup"]["min_free_gb"]:
                 ctx.notify("warn", "Disk space low", f"{free_gb:.0f} GB free on the engine drive", None)
             s["pruned"] = prune_work(cfg, conn)
+            from . import accounts, occasions
+
+            s["occasion_reminders"] = occasions.remind(conn, cfg, ctx.notify)
+            s["accounts_retention"] = accounts.prune(conn, cfg)
             s["dashboard"] = build_dashboard(ctx)
             _finish(conn, tid, "ok", s)
         except Exception as exc:  # noqa: BLE001
@@ -319,6 +331,17 @@ def review(ctx: Ctx) -> dict:
     return {"from": pb["version"], "to": new["version"], "summary": rv.get("summary")}
 
 
+def _analyze_accounts(ctx: Ctx) -> dict:
+    from . import accounts
+
+    if not ctx.cfg.get("accounts.enabled", True):
+        return {"skipped": "accounts.enabled = false"}
+    if not ctx.conn.execute("SELECT 1 FROM account_media LIMIT 1").fetchone():
+        return {"skipped": "no imported posts"}
+    out = accounts.analyze(ctx.cfg, ctx.conn)
+    return {"accounts": len(out["accounts"]), "ideas": len(out["ideas"])}
+
+
 def weekly(cfg, toast: bool | None = None) -> dict:
     from . import brief as briefmod
 
@@ -330,6 +353,7 @@ def weekly(cfg, toast: bool | None = None) -> dict:
         steps = [
             ("trends", lambda: {"items": len(briefmod.run_trends(ctx).get("items", []))}),
             ("review", lambda: review(ctx)),
+            ("accounts", lambda: _analyze_accounts(ctx)),
             ("brief", lambda: {"scripts": len(briefmod.make_brief(ctx)["scripts"])}),
             ("token_refresh", lambda: tokens.refresh_if_due(cfg, conn, ctx.notify) if is_live(cfg) else {"skipped": "dry-run"}),
             ("dashboard", lambda: build_dashboard(ctx)),

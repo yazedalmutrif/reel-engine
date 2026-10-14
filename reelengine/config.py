@@ -223,9 +223,63 @@ SCHEMA: dict = _obj(
         "vault": _obj({"path": _STR, "subdir": {"const": "12 Social Media"}, "enabled": _BOOL}),  # pinned: the engine writes nowhere else
         "notify": _obj({"toast": _BOOL, "telegram": _BOOL}),
         "backup": _obj({"keep": {"type": "integer", "minimum": 1}, "onedrive_copy_dir": _STR, "min_free_gb": _NUM}),
-        "dashboard": _obj({"host": {"enum": list(LOOPBACK_HOSTS)}, "port": {"type": "integer", "minimum": 1024, "maximum": 65535}}),
-    }
+        "dashboard": _obj(
+            {
+                "host": {"enum": list(LOOPBACK_HOSTS)},
+                "port": {"type": "integer", "minimum": 1024, "maximum": 65535},
+                "allow_writes": _BOOL,  # calendar/accounts edits + uploads through the local API (CSRF-protected)
+            },
+            required=["host", "port"],
+        ),
+        "calendar": _obj(
+            {
+                "enabled": _BOOL,
+                "lookahead_min_days": {"type": "integer", "minimum": 0, "maximum": 21},
+                "lookahead_max_days": {"type": "integer", "minimum": 7, "maximum": 60},
+                "film_lead_days": {"type": "integer", "minimum": 0, "maximum": 14},
+                "post_window_days": {"type": "integer", "minimum": 0, "maximum": 7},
+                "notify": _BOOL,
+            }
+        ),
+        "accounts": _obj(
+            {
+                "enabled": _BOOL,
+                "own": {"type": "string", "pattern": r"^@?[A-Za-z0-9._]{0,30}$"},
+                "reference": {"type": "array", "items": {"type": "string", "pattern": r"^@?[A-Za-z0-9._]{1,30}$"}, "maxItems": 20},
+                "competitor": {"type": "array", "items": {"type": "string", "pattern": r"^@?[A-Za-z0-9._]{1,30}$"}, "maxItems": 20},
+                "retention_days": {"type": "integer", "minimum": 1, "maximum": 365},          # caption text
+                "metrics_retention_days": {"type": "integer", "minimum": 1, "maximum": 365},  # the rest of each post row
+                "max_media_per_account": {"type": "integer", "minimum": 1, "maximum": 100},
+                # "off": manual import only (the Instagram-Login path has no Business Discovery, see API_NOTES).
+                # "facebook_login": Business Discovery on graph.facebook.com with a separate Facebook-Login token.
+                "discovery": {"enum": ["off", "facebook_login"]},
+                "discovery_host": {"type": "string", "pattern": r"^(https://|http://127\.0\.0\.1:\d+)"},
+                "discovery_ig_user_id": {"type": "string", "pattern": r"^\d*$"},
+            }
+        ),
+        "upload": _obj(
+            {
+                "enabled": _BOOL,
+                "max_mb": {"type": "integer", "minimum": 1, "maximum": 4096},
+                "min_free_gb": {"type": "number", "minimum": 0},
+            }
+        ),
+    },
+    required=["engine", "paths", "intake", "whisper", "brain", "edit", "captions", "render", "qa", "schedule",
+              "instagram", "cta", "learning", "vault", "notify", "backup", "dashboard"],
 )
+
+# Sections added after v1. A config.toml written before them still loads: these defaults are
+# merged UNDER the file (the file wins), then the whole thing is validated as usual.
+DEFAULTS: dict = {
+    "dashboard": {"allow_writes": True},
+    "calendar": {"enabled": True, "lookahead_min_days": 3, "lookahead_max_days": 21, "film_lead_days": 3,
+                 "post_window_days": 2, "notify": True},
+    "accounts": {"enabled": True, "own": "", "reference": [], "competitor": [], "retention_days": 90,
+                 "metrics_retention_days": 180, "max_media_per_account": 30, "discovery": "off", "discovery_host": "https://graph.facebook.com",
+                 "discovery_ig_user_id": ""},
+    "upload": {"enabled": True, "max_mb": 2048, "min_free_gb": 5},
+}
 
 
 def _semantic_errors(d: dict) -> list[str]:
@@ -255,6 +309,9 @@ def _semantic_errors(d: dict) -> list[str]:
         errs.append("learning.reward_checkpoint_h must be one of instagram.insights_checkpoints_h")
     if d["cta"]["service_enabled"] is False and "service" in d["cta"]["allowed"]:
         errs.append("cta.allowed contains 'service' while cta.service_enabled is false")
+    cal = d.get("calendar") or {}
+    if cal and cal["lookahead_min_days"] >= cal["lookahead_max_days"]:
+        errs.append("calendar.lookahead_min_days must be below calendar.lookahead_max_days")
     hosts = [d["instagram"][k] for k in ("graph_host", "container_host", "upload_host")]
     if d["engine"]["mode"] == "live" and any(h.startswith("http://") for h in hosts):
         errs.append("engine.mode is live but an Instagram host is the local mock (http://127.0.0.1)")
@@ -383,6 +440,7 @@ def load_config(path: str | os.PathLike | None = None, overrides: dict | None = 
         raise ConfigError(f"config not found: {src}") from exc
     except tomli.TOMLDecodeError as exc:
         raise ConfigError(f"config.toml is not valid TOML: {exc}") from exc
+    data = _deep_merge(DEFAULTS, data)
     if overrides:
         data = _deep_merge(data, overrides)
     errs = validate(data)
