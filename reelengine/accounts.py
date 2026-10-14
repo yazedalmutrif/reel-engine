@@ -61,11 +61,14 @@ def norm_username(u: str) -> str:
 
 
 def _next_pseudonym(conn) -> str:
-    n = 1
+    """Monotonic: a forgotten account's pseudonym is never handed out again (its old analysis
+    rows must not attach to a new account)."""
+    n = int(db.meta_get(conn, "accounts_next_pseudonym", "1") or 1)
     for r in conn.execute("SELECT pseudonym FROM accounts"):
         m = re.match(r"^ACC_(\d+)$", r["pseudonym"] or "")
         if m:
             n = max(n, int(m.group(1)) + 1)
+    db.meta_set(conn, "accounts_next_pseudonym", str(n + 1))
     return f"ACC_{n:02d}"
 
 
@@ -195,14 +198,14 @@ def clean_caption(text: str | None) -> str | None:
 
 def _store(conn, account_id: int, rec: dict, source: str) -> bool:
     cur = conn.execute(
-        "INSERT INTO account_media(account_id, media_key, permalink, posted_at, media_type, caption, likes, comments, views, duration_s, source, fetched_at) "
-        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(account_id, media_key) DO UPDATE SET "
+        "INSERT INTO account_media(account_id, media_key, permalink, posted_at, media_type, caption, likes, comments, views, duration_s, source, fetched_at, first_seen_at) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(account_id, media_key) DO UPDATE SET "
         "permalink=COALESCE(excluded.permalink, permalink), posted_at=COALESCE(excluded.posted_at, posted_at), "
         "media_type=COALESCE(excluded.media_type, media_type), caption=COALESCE(excluded.caption, caption), "
         "likes=COALESCE(excluded.likes, likes), comments=COALESCE(excluded.comments, comments), views=COALESCE(excluded.views, views), "
         "duration_s=COALESCE(excluded.duration_s, duration_s), source=excluded.source, fetched_at=excluded.fetched_at",
         (account_id, rec["media_key"], rec.get("permalink"), rec.get("posted_at"), rec.get("media_type"), rec.get("caption"),
-         rec.get("likes"), rec.get("comments"), rec.get("views"), rec.get("duration_s"), source, db.now_iso()),
+         rec.get("likes"), rec.get("comments"), rec.get("views"), rec.get("duration_s"), source, db.now_iso(), db.now_iso()),
     )
     return cur.rowcount > 0
 
@@ -301,15 +304,16 @@ def parse_paste(text: str) -> list[dict]:
 
 # ------------------------------------------------------------------ retention
 def prune(conn, cfg, now: datetime | None = None) -> dict:
-    """Wipe caption text after retention_days and delete post rows after metrics_retention_days.
+    """Wipe caption text after retention_days and delete post rows after metrics_retention_days, counted
+    from when the post was FIRST stored (first_seen_at; a re-import never resets the clock).
     The own account's rows follow the same clock (the engine's own reels live in `reels`, untouched)."""
     now = now or db.utcnow()
     cap_cut = (now - timedelta(days=int(cfg.get("accounts.retention_days", 90)))).isoformat(timespec="seconds")
     row_cut = (now - timedelta(days=int(cfg.get("accounts.metrics_retention_days", 180)))).isoformat(timespec="seconds")
     conn.execute("PRAGMA secure_delete=ON")
     with db.tx(conn):
-        wiped = conn.execute("UPDATE account_media SET caption=NULL WHERE caption IS NOT NULL AND fetched_at < ?", (cap_cut,)).rowcount
-        deleted = conn.execute("DELETE FROM account_media WHERE fetched_at < ?", (row_cut,)).rowcount
+        wiped = conn.execute("UPDATE account_media SET caption=NULL WHERE caption IS NOT NULL AND first_seen_at < ?", (cap_cut,)).rowcount
+        deleted = conn.execute("DELETE FROM account_media WHERE first_seen_at < ?", (row_cut,)).rowcount
         old_an = conn.execute("DELETE FROM account_analyses WHERE created_at < ?", (row_cut,)).rowcount
     return {"captions_wiped": wiped, "posts_deleted": deleted, "analyses_deleted": old_an}
 
@@ -330,7 +334,7 @@ def pseudonymise(text: str | None, names: dict[str, str]) -> str:
     t = _MENTION.sub(repl, t)
     for u, p in names.items():
         t = re.sub(rf"(?<![\w.]){re.escape(u)}(?![\w])", p, t, flags=re.I)
-    return t
+    return t.replace("<", "‹").replace(">", "›")  # a caption can't close the prompt's <data> block
 
 
 def _hour_local(iso: str | None, tz) -> int | None:

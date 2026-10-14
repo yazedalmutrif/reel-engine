@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% import "_macros.html" as m %}
 {% macro cat_chip(cat, label) %}<span class="chip chip-sm cal-cat-{{ cat }}"><span class="dot" aria-hidden="true"></span>{{ label }}</span>{% endmacro %}
-{% macro flag(official) %}{% if official %}<span class="cal-flag cal-flag-official">Official</span>{% else %}<span class="cal-flag cal-flag-intl">International · unofficial</span>{% endif %}{% endmacro %}
+{% macro flag(official) %}{% if official %}<span class="cal-flag cal-flag-official">Official</span>{% else %}<span class="cal-flag cal-flag-intl">Not official</span>{% endif %}{% endmacro %}
 {% block main %}
 {% set cal = calendar %}
 <div class="page-head">

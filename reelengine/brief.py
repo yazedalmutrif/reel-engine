@@ -65,6 +65,8 @@ def make_brief(ctx, k: int = 6) -> dict:
         errs = []
         if len(b["scripts"]) != len(slots):
             errs.append(f"write exactly {len(slots)} scripts")
+        if sum(1 for s in b["scripts"] if s.get("occasion")) > 2:
+            errs.append("at most 2 scripts may be about an occasion")
         for i, (s, want) in enumerate(zip(b["scripts"], slots), 1):
             if s["hook_type"] != want["hook_type"] or s["duration_band"] != want["duration_band"]:
                 errs.append(f"script {i} must use hook_type={want['hook_type']} and duration_band={want['duration_band']}")

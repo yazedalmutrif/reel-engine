@@ -139,6 +139,15 @@ def test_upload_lands_in_inbox_then_normal_intake(srv, cfg, conn):
     assert j["uploads"][0]["reel"] == row["id"] and j["uploads"][0]["state"] == "new"
 
 
+def test_upload_never_overwrites_an_inbox_file(srv, cfg):
+    cfg.inbox.mkdir(parents=True, exist_ok=True)
+    (cfg.inbox / "IMG_0001.mov").write_bytes(b"phone clip")
+    r, j = upload(srv)
+    assert j["name"] == "IMG_0001-1.mov"
+    assert (cfg.inbox / "IMG_0001.mov").read_bytes() == b"phone clip"
+    assert not [p for p in cfg.inbox.iterdir() if p.name.startswith(".")]
+
+
 def test_duplicate_upload_is_spotted(srv, cfg, conn):
     upload(srv)
     r, j = upload(srv, name="again.mov")
@@ -242,6 +251,8 @@ def test_accounts_api(srv, conn):
     assert r.status == 200 and j["stored"] == 1 and len(j["errors"]) == 1
     r, j = jpost(srv, "/api/accounts", {"action": "attach", "username": "bad name", "role": "reference"})
     assert r.status == 400
+    r, j = jpost(srv, "/api/accounts", {"action": "import", "username": ["not", "a", "string"], "text": "instagram.com/reel/FFFF6666"})
+    assert r.status == 200 and j["stored"] == 0 and j["errors"]  # a bad type is a clear row error, not a 500
     r, j = jpost(srv, "/api/accounts", {"action": "forget", "username": "ref_one"})
     assert r.status == 200
     assert conn.execute("SELECT COUNT(*) FROM account_media").fetchone()[0] == 0

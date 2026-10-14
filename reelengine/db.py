@@ -351,7 +351,8 @@ CREATE TABLE IF NOT EXISTS account_media (
   views INTEGER,
   duration_s REAL,
   source TEXT NOT NULL,              -- api | manual | csv
-  fetched_at TEXT NOT NULL,
+  fetched_at TEXT NOT NULL,          -- last import
+  first_seen_at TEXT NOT NULL,       -- first import: the retention clock (never updated)
   UNIQUE(account_id, media_key)
 );
 

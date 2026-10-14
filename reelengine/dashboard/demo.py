@@ -696,11 +696,11 @@ def _seed_calendar_accounts(conn, cfg, now: datetime, today: date, rnd) -> None:
         names[u] = cur.lastrowid
         for j in range(8 if role != "own" else 5):
             posted = now - timedelta(days=2 + j * 3, hours=rnd.randint(0, 6))
-            conn.execute("INSERT INTO account_media(account_id, media_key, permalink, posted_at, media_type, caption, likes, comments, views, duration_s, source, fetched_at) "
-                         "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            conn.execute("INSERT INTO account_media(account_id, media_key, permalink, posted_at, media_type, caption, likes, comments, views, duration_s, source, fetched_at, first_seen_at) "
+                         "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
                          (cur.lastrowid, f"manual:demo{k}{j}", None, _iso(posted), "REELS", DEMO_CAPTIONS[(j + k) % len(DEMO_CAPTIONS)] + " (demo)",
                           rnd.randint(40, 900), rnd.randint(2, 60), rnd.randint(800, 30000), float(rnd.choice((22, 28, 35, 41, 55))), "manual",
-                          _iso(now - timedelta(days=1))))
+                          _iso(now - timedelta(days=1)), _iso(now - timedelta(days=1))))
     analysis = {
         "summary": "Demo analysis: list and question hooks under 35 s led on both reference accounts; evenings after 21:00 did best.",
         "accounts": [

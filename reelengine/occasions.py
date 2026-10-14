@@ -330,8 +330,11 @@ def occurrences_of(o: dict, start: date, end: date) -> list[tuple[date, bool]]:
             except ValueError:
                 continue
     else:
-        hy0 = Gregorian(start.year, start.month, start.day).to_hijri().year - 1
-        hy1 = Gregorian(end.year, end.month, end.day).to_hijri().year + 1
+        try:
+            hy0 = Gregorian(start.year, start.month, start.day).to_hijri().year - 1
+            hy1 = Gregorian(end.year, end.month, end.day).to_hijri().year + 1
+        except (ValueError, OverflowError):  # outside the Umm al-Qura table (about 1924-2077)
+            return []
         cand = []
         for hy in range(hy0, hy1 + 1):
             m, dd = int(o["month"]), int(o["day"])
@@ -386,7 +389,7 @@ def brief_text(items: list[Occurrence]) -> str:
         lines.append(
             f"- id={o['slug']} · {o['name_en']} / {o['name_ar']} · {when} (in {x.days_until} days"
             + (", Hijri date, may move a day after moon sighting" if x.approximate else "") + ")"
-            + f" · {'official Saudi occasion' if o['official'] else 'international/unofficial'} · {o['category']}"
+            + f" · {'official Saudi occasion' if o['official'] else 'not an official occasion or holiday'} · {o['category']}"
             + (f" · angle: {o['angle']}" if o.get("angle") else "")
         )
     return "\n".join(lines)
@@ -412,9 +415,17 @@ def match_text(text: str, occasions: Iterable[dict]) -> list[dict]:
                 variants.append(k)
                 if k.startswith("ال") and len(k) >= 7:  # «لليوم الوطني», «باليوم الوطني»: the article merges with a prefix
                     variants.append(k[2:])
-        if any(v in t for v in variants):
+        if any(_contains(t, v) for v in variants):
             hits.append(o)
     return hits
+
+
+def _contains(text: str, key: str) -> bool:
+    """Arabic: substring (prefixes like و/ب/ل join the word). Latin: whole words only
+    («leap of faith» must not tag LEAP, «eid» not inside other words)."""
+    if re.search(r"[a-z]", key):
+        return re.search(rf"(?<![a-z0-9]){re.escape(key)}(?![a-z0-9])", text) is not None
+    return key in text
 
 
 def reel_text(row) -> str:

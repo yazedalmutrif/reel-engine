@@ -93,6 +93,10 @@ def test_fixed_and_one_off_and_multi_day(seeded):
     assert "fii10-2026" in mid
 
 
+def test_dates_outside_umm_al_qura_range_dont_crash(seeded):
+    assert [x for x in oc.between(oc.all_occasions(seeded), date(2090, 1, 1), date(2090, 12, 31)) if x.occasion["rule"] == "hijri"] == []
+
+
 def test_29_feb_falls_back_in_common_years(conn):
     oc.add(conn, {"name_ar": "اختبار", "name_en": "Leap test", "rule": "gregorian", "month": 2, "day": 29, "category": "tech"})
     got = [x.start for x in oc.between(oc.all_occasions(conn), date(2027, 1, 1), date(2028, 12, 31))]
@@ -106,7 +110,8 @@ def test_upcoming_window_and_film_by(cfg, seeded):
     r = next(x for x in items if x.occasion["slug"] == "ramadan-start")
     assert r.days_until == 14 and r.film_by == date(2027, 2, 5)
     txt = oc.brief_text(items)
-    assert "id=ramadan-start" in txt and "moon sighting" in txt and "official Saudi occasion" in txt
+    assert "id=ramadan-start" in txt and "moon sighting" in txt and "not an official occasion" in txt
+    assert "official Saudi occasion" in oc.brief_text(oc.upcoming(seeded, cfg, today=date(2027, 2, 10)))  # Founding Day
 
 
 # ------------------------------------------------------------------ CRUD validation
@@ -155,6 +160,8 @@ def test_match_text_uses_names_and_keywords(seeded):
     assert [o["slug"] for o in oc.match_text("نصائح لليوم الوطني", occs)] == ["national-day"]
     assert "founding-day" in [o["slug"] for o in oc.match_text("What Founding Day teaches about careers", occs)]
     assert oc.match_text("3 أدوات ذكاء اصطناعي", occs) == []
+    assert oc.match_text("take a leap of faith with your first job", occs) == []  # Latin keys match whole words only
+    assert "leap-2027" in [o["slug"] for o in oc.match_text("what I saw at LEAP 2027 in Riyadh", occs)]
 
 
 def _qa_passed_reel(conn, topic: str) -> int:

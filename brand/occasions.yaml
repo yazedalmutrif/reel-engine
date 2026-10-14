@@ -11,8 +11,9 @@
 #                     moon-sighting announcement and can move by a day: always re-check before posting.
 #         once      = a single dated event (year required), e.g. a conference
 # category: national | religious | international | tech | career
-# official: true only for occasions set by a Saudi royal order / official holiday. International and
-#           unofficial days are official: false.
+# official: true only for national days set by a Saudi royal order and for official public holidays (the Eids,
+#           Arafah). Religious seasons that are not a holiday (Ramadan's start), international and unofficial
+#           days are official: false.
 # Every seeded day has a source and the date it was checked (researched 2026-10-14). Items marked
 # "secondary source" were not confirmed on a primary government/organiser page: re-check before filming.
 occasions:
@@ -65,7 +66,7 @@ occasions:
     month: 9
     day: 1
     category: religious
-    official: true
+    official: false
     angle: Productivity and study routines in Ramadan; respectful tone, no jokes about worship.
     notes: Umm al-Qura date (computed); the start is announced after moon sighting and can move by a day.
     source_url: https://blog.wego.com/ramadan-2027/
@@ -302,7 +303,7 @@ occasions:
     notes: 12-15 Apr 2027, RECC Malham. Secondary source only (the official site was not reachable); re-check on onegiantleap.com.
     source_url: https://www.beri.net/events/leap-2027
     checked_on: 2026-10-14
-    keywords: [leap, ليب]
+    keywords: [leap 2027, leap conference, مؤتمر ليب, ليب 2027]
 
   - slug: graduation-season
     name_ar: موسم التخرج

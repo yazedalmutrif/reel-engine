@@ -1,5 +1,5 @@
 """Occasion rules in the legal gate (brand/gates_occasions.yaml): flag, Shahada, emblem, leaders, religion,
-occasion + offer. Additive: every existing gates.yaml rule still holds, and a brand pack can't drop them."""
+occasion + offer. Additive: every existing gates.yaml rule still holds, and a brand pack can only add occasion rules."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -41,6 +41,8 @@ CLEAN = (
     "3 أدوات تساعدك تذاكر في رمضان",
     "Happy Founding Day! What our history teaches about building careers",
     "عيدكم مبارك",
+    "كود بايثون بسيط تتعلمه في رمضان",
+    "نصيحة للخريجين في اليوم الوطني: تعلم كتابة الكود",
 )
 
 
@@ -77,14 +79,20 @@ def test_existing_rules_still_fire_next_to_occasions():
     assert "engagement_bait" in hits
 
 
-def test_brand_pack_copy_wins_but_gates_yaml_is_untouched(tmp_path):
+def test_brand_pack_can_add_but_not_drop_occasion_rules(tmp_path):
     own = tmp_path / "pack"
     own.mkdir()
     for f in (ROOT / "brand.example").iterdir():
         (own / f.name).write_bytes(f.read_bytes())
-    (own / "gates_occasions.yaml").write_text(yaml.safe_dump({"groups": {}, "rules": []}), encoding="utf-8")
+    (own / "gates_occasions.yaml").write_text(yaml.safe_dump({
+        "groups": {"OCC": "nothing-matches-this", "MINE": "(كلمه خاصه)"},
+        "rules": [{"id": "occ_commercial", "match": "MINE", "severity": "warn", "reason": "try to weaken"},
+                  {"id": "pack_extra", "match": "MINE", "severity": "hold", "reason": "pack rule"}],
+        "filming_checklist": ["Pack line"]}, allow_unicode=True), encoding="utf-8")
     b = load_brand(own)
-    assert check_occasion_rules({"caption": "خصم 30% بمناسبة اليوم الوطني"}, b.occasion_rules) == []
+    got = {h.rule: h.severity for h in check_occasion_rules({"caption": "خصم 30% بمناسبة اليوم الوطني كلمة خاصة"}, b.occasion_rules)}
+    assert got["occasion.occ_commercial"] == "hard" and got["occasion.pack_extra"] == "hard"
+    assert "Pack line" in b.occasion_rules["filming_checklist"] and len(b.occasion_rules["filming_checklist"]) >= 9
     # the base legal gate is independent of the occasion file
     assert {h.rule for h in run_content_gates({"caption": "استخدم كود خصم HUDA10"}, None, CFG, b)} >= {"ads_third_party"}
 

@@ -195,11 +195,13 @@ class WriteApi:
             elif action == "forget":
                 if not acctmod.forget(conn, str(d.get("username") or "")):
                     raise ApiError(404, "not attached")
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")  # deleted rows must not linger in the WAL ...
+                conn.execute("VACUUM")  # ... or in free pages (secure_delete is on in forget)
                 res = {"ok": True}
             elif action == "import":
                 text = str(d.get("text") or "")
                 rows = acctmod.parse_csv(text) if d.get("format") == "csv" else acctmod.parse_paste(text)
-                out = acctmod.import_rows(conn, self.cfg, rows, default_username=d.get("username") or None)
+                out = acctmod.import_rows(conn, self.cfg, rows, default_username=str(d.get("username") or "") or None)
                 res = {"ok": not out["errors"], "stored": out["stored"], "errors": out["errors"][:20], "accounts": out["accounts"]}
             else:
                 raise ApiError(400, "action must be attach, forget or import")
@@ -262,12 +264,7 @@ class WriteApi:
                         cur = conn.execute("INSERT INTO uploads(created_at, original_name, stored_name, size_bytes, sha256, status, duplicate_of) VALUES(?,?,?,?,?,?,?)",
                                            (db.now_iso(), name, name, n, sha, "duplicate", dup["id"] if dup else None))
                     return 200, {"id": cur.lastrowid, "name": name, "size": n, "status": "duplicate", "reel": dup["id"] if dup else None}
-                dest = self.inbox / name
-                k = 1
-                while dest.exists():
-                    dest = self.inbox / f"{Path(name).stem}-{k}{Path(name).suffix}"
-                    k += 1
-                os.replace(tmp, dest)
+                dest = self._place(tmp, name)
                 with db.tx(conn):
                     cur = conn.execute("INSERT INTO uploads(created_at, original_name, stored_name, size_bytes, sha256, status) VALUES(?,?,?,?,?,?)",
                                        (db.now_iso(), name, dest.name, n, sha, "queued"))
@@ -283,6 +280,28 @@ class WriteApi:
                 except OSError:
                     pass
             self._upload_lock.release()
+
+    def _place(self, tmp: Path, name: str) -> Path:
+        """Move tmp into the inbox under a name nobody uses, atomically and without overwriting:
+        os.link fails if the name exists (e.g. a OneDrive clip landed meanwhile), then the temp is unlinked."""
+        stem, ext = Path(name).stem, Path(name).suffix
+        for k in range(1000):
+            dest = self.inbox / (name if k == 0 else f"{stem}-{k}{ext}")
+            try:
+                os.link(tmp, dest)
+            except FileExistsError:
+                continue
+            except OSError:  # a filesystem without hard links: reserve the name exclusively, then replace it
+                try:
+                    with open(dest, "xb"):
+                        pass
+                except FileExistsError:
+                    continue
+                os.replace(tmp, dest)
+                return dest
+            tmp.unlink()
+            return dest
+        raise ApiError(409, "too many files with this name in the inbox")
 
     def uploads(self) -> list[dict]:
         conn = self._conn()

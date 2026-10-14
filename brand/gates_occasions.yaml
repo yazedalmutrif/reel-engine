@@ -1,6 +1,6 @@
 # National / religious occasion rules (added 2026-10-14, ruling by legal-compliance; NOT legal advice).
 # ADDITIVE to gates.yaml: nothing here loosens an existing rule, and the learner can't edit this file.
-# A brand pack may ship its own gates_occasions.yaml (brand_dir wins); otherwise this generic file is used.
+# These generic rules always apply. A brand pack's own gates_occasions.yaml can only ADD groups, rules and checklist lines.
 #
 # Matching runs on the same normalised text as gates.yaml (diacritics removed, أإآ→ا, ى→ي, ة→ه,
 # Arabic-Indic digits→0-9), case-insensitive. A rule matches `match`; with `near`, only when a `near`
@@ -14,7 +14,7 @@
 # Media Law M/33 art. 5 (nezams.com/?p=895); MoC discount licence (okaz.com.sa/economy/na/2233268).
 groups:
   OCC: '(اليوم الوطني|يوم الوطن|يوم التاسيس|يوم العلم|رمضان|العيد|عيد الفطر|عيد الاضحي|عيدكم مبارك|national day|founding day|flag day|ramadan|\beid\b)'
-  COM: '(خصم|خصومات|تخفيض|تخفيضات|عرض خاص|عروض|كود|كوبون|سعر خاص|بسعر|\d+ ?%|ريال|اطلب|احجز|سجل الحين|discount|\bsale\b|\boffer\b|promo|coupon|order now|book now)'
+  COM: '(خصم|خصومات|تخفيض|تخفيضات|عرض خاص|عروض|كود خصم|كود الخصم|بروموكود|برومو كود|كوبون|سعر خاص|بسعر|\d+ ?%|ريال|اطلب|احجز|سجل الحين|discount|\bsale\b|\boffer\b|promo code|promo|coupon|order now|book now)'
   FLAG: '(العلم السعودي|علم السعوديه|علم المملكه|علم بلادي|رايه التوحيد|الرايه الخضراء|saudi flag|🇸🇦)'
   SHAHADA: '(لا اله الا الله|محمد رسول الله|الشهادتين|كلمه التوحيد|\bshahada\b)'
   EMBLEM: '(السيفين والنخله|النخله والسيفين|سيفين ونخله|شعار المملكه|شعار الدوله|saudi (royal )?emblem|coat of arms)'
