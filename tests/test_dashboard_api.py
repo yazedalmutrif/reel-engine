@@ -457,3 +457,14 @@ def test_old_db_without_v3_tables_still_builds(cfg, tmp_path):
     assert ctx["coming_up"] and ctx["accounts"]["recs"] == {}
     build_dashboard(cfg, c, out_dir=tmp_path / "site_old")
     c.close()
+
+
+def test_link_job_states_are_bounded(cfg, tmp_path):
+    from reelengine.dashboard import api as apimod
+
+    api = apimod.WriteApi(cfg, cfg.db_path, tmp_path / "site")
+    for k in range(apimod.REC_JOBS_KEPT + 10):
+        api._rec_jobs[f"old{k}"] = {"state": "done"}
+    api._recommend_job("not_attached_user")  # finishes with an error state (not attached)
+    assert len(api._rec_jobs) == apimod.REC_JOBS_KEPT
+    assert api.recommend_status("not_attached_user")["state"] == "error" and "old0" not in api._rec_jobs

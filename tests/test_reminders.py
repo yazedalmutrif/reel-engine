@@ -363,3 +363,33 @@ def test_without_a_v11_flag_the_advance_lead_is_sent(cfg, one):
     n = Notes()
     oc.remind(one, cfg, n, today=at(7))
     assert len(n.sent) == 1
+
+
+def test_a_failing_notify_is_not_retried(cfg, one):
+    calls = []
+
+    def boom(level, title, body="", reel_id=None, kind="general"):
+        calls.append(kind)
+        raise TypeError("bug inside notify")
+
+    with pytest.raises(TypeError):
+        oc.remind(one, cfg, boom, today=at(7))
+    assert calls == ["occasion"]  # one attempt, never a second send without kind
+
+
+def test_old_style_notify_without_kind_still_works(cfg, one):
+    got = []
+    oc.remind(one, cfg, lambda level, title, body="", reel_id=None: got.append(title), today=at(7))
+    assert len(got) == 1
+
+
+def test_every_seed_reminder_is_allowed_on_telegram(cfg, conn):
+    """No seed day's reminder (title + body with template ideas + checklist) may trip the Telegram refusal rules."""
+    from reelengine.notify import telegram_refusal
+
+    oc.ensure_seeded(conn, cfg)
+    brand = load_brand(cfg.brand_dir)
+    for x in oc.between(oc.all_occasions(conn), date(2026, 10, 16), date(2027, 10, 15), date(2026, 10, 15)):
+        info = ideas.peek(conn, cfg, brand, x, 3)
+        text = oc.reminder_title(x) + "\n\n" + oc.reminder_body(x, info)
+        assert telegram_refusal(text) is None, (x.occasion["slug"], telegram_refusal(text))

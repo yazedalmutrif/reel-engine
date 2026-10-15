@@ -579,9 +579,16 @@ def reminder_body(x: Occurrence, ideas: dict) -> str:
 
 def _send(notify, level: str, title: str, body: str) -> None:
     """notify gains a `kind` kwarg in v1.2 (macOS / Telegram routing); older callables don't take it."""
+    import inspect
+
     try:
+        params = inspect.signature(notify).parameters
+        takes_kind = "kind" in params or any(p.kind is p.VAR_KEYWORD for p in params.values())
+    except (TypeError, ValueError):
+        takes_kind = False
+    if takes_kind:  # never retry: a TypeError inside notify must not send the reminder twice
         notify(level, title, body, None, kind="occasion")
-    except TypeError:
+    else:
         notify(level, title, body, None)
 
 

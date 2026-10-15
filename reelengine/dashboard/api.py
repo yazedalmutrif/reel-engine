@@ -48,6 +48,7 @@ UPLOAD_TYPES = {
 # ISO-BMFF / QuickTime top-level atoms a phone clip can start with (bytes 4..8)
 MP4_ATOMS = (b"ftyp", b"moov", b"wide", b"mdat", b"free", b"skip", b"pnot")
 CHUNK = 1024 * 1024
+REC_JOBS_KEPT = 50  # finished Link-account job states kept for recommend_status
 SOCKET_TIMEOUT_S = 60
 
 
@@ -309,8 +310,11 @@ class WriteApi:
         finally:
             self.rebuild()  # the page shows the account (and the result) BEFORE the state says done
             with self._rec_lock:
-                self._rec_jobs[u] = state
+                self._rec_jobs.pop(u, None)
+                self._rec_jobs[u] = state  # newest last
                 self._rec_running = None
+                while len(self._rec_jobs) > REC_JOBS_KEPT:  # bounded: drop the oldest finished entries
+                    self._rec_jobs.pop(next(iter(self._rec_jobs)))
 
     def recommend_status(self, username: str) -> dict:
         try:

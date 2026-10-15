@@ -500,7 +500,7 @@ def analyze(cfg, conn, include_demo: bool = False) -> dict:
                 errs.append(f"idea {i}: no @handles or links")
         return errs
 
-    ctx = {"input_json": json.dumps(inp, ensure_ascii=False, indent=1, default=str)}
+    ctx = {"input_json": _data_json(inp)}
     out = brain.ask(cfg, conn, "accounts", ctx, model=cfg["brain"]["review_model"], validate=validate)
     conn.execute("INSERT INTO account_analyses(created_at, json, stats_json) VALUES(?,?,?)",
                  (db.now_iso(), db.jdump(out), db.jdump({"stats": inp["stats"], "own": inp["own"]})))
@@ -751,7 +751,7 @@ def recommend_input(cfg, conn, username: str, niche: str | None = None, today=No
                                (acc["id"],)).fetchone() is not None
     pbits = _playbook_bits(conn, cfg)
     try:
-        trends = [{"title": str(t.get("title") or "")[:160], "date": t.get("published_date")} for t in (latest_trends(conn).get("items") or [])][:10]
+        trends = [{"title": pseudonymise(str(t.get("title") or "")[:160], {}), "date": t.get("published_date")} for t in (latest_trends(conn).get("items") or [])][:10]
     except Exception:  # noqa: BLE001
         trends = []
     occ = fitting_occasions(conn, cfg, raw_niche, today)
@@ -844,6 +844,19 @@ def _rec_problems(out: dict, inp: dict, cfg, brand, captions: list[str]) -> list
     return errs
 
 
+def _data_json(obj) -> str:
+    """JSON for a prompt's <data> block: no text inside can close the block (fact-check 2026-10-15)."""
+    return json.dumps(obj, ensure_ascii=False, indent=1, default=str).replace("<", "‹").replace(">", "›")
+
+
+def _brain_reserve_ok(cfg, conn) -> bool:
+    """Leave [calendar] brain_reserve_calls free for reel processing (Link account can be clicked a lot)."""
+    from . import brain
+
+    left = int(cfg["brain"]["max_calls_per_day"]) - brain.calls_today(conn)
+    return left >= int(cfg.get("calendar.brain_reserve_calls", 10))
+
+
 def recommend(cfg, conn, username: str, niche: str | None = None, *, use_brain: bool = True, today=None) -> dict:
     """Recommendations for one attached account; stored in account_recommendations. One brain call (task
     'recommend', no tools, schema-validated, counted in the daily cap) or, without the brain / at the cap /
@@ -860,11 +873,14 @@ def recommend(cfg, conn, username: str, niche: str | None = None, *, use_brain: 
     except Exception:  # noqa: BLE001
         brand = None
     out, source = None, "template"
+    if use_brain and not _brain_reserve_ok(cfg, conn):
+        log.info("recommend: fewer than brain_reserve_calls left in the 24 h cap; using the template")
+        use_brain = False
     if use_brain:
         caps = stored_captions(conn) + [r[0] for r in conn.execute(
             "SELECT caption FROM account_media WHERE account_id=? AND caption IS NOT NULL", (acc["id"],))]
         public = {k: v for k, v in inp.items() if not k.startswith("_")}
-        ctx = {"basis": inp["basis"], "input_json": json.dumps(public, ensure_ascii=False, indent=1, default=str)}
+        ctx = {"basis": inp["basis"], "input_json": _data_json(public)}
         try:
             out = brain.ask(cfg, conn, "recommend", ctx, model=cfg["brain"]["review_model"],
                             validate=lambda o: _rec_problems(o, inp, cfg, brand, caps))

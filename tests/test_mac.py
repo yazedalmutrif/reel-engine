@@ -342,7 +342,7 @@ def test_cli_install_needs_mac_flag_and_macos(cfg, monkeypatch):
     monkeypatch.setattr(macsched, "install", lambda *a, **k: pytest.fail("must not install"))
     assert cli.cmd_schedule(cfg, _args(action="install")) == 2
     monkeypatch.setattr(cli.sys, "platform", "linux")
-    assert cli.cmd_schedule(cfg, _args(action="install", mac=True, yes=True)) == 2
+    assert cli.cmd_schedule(cfg, _args(action="install", mac=True)) == 2
 
 
 def test_cli_uninstall_refuses_without_phrase(cfg, monkeypatch):
@@ -372,9 +372,11 @@ def test_cli_status_windows_uses_winsched(cfg, monkeypatch, capsys):
     assert "Brain - Reel Engine Tick" in capsys.readouterr().out
 
 
-def test_schedule_parser():
-    a = cli.build_parser().parse_args(["schedule", "install", "--mac", "--yes"])
-    assert (a.action, a.mac, a.yes, a.fn) == ("install", True, True, cli.cmd_schedule)
+def test_schedule_parser_has_no_skip_confirmation_flag():
+    a = cli.build_parser().parse_args(["schedule", "install", "--mac"])
+    assert (a.action, a.mac, a.fn) == ("install", True, cli.cmd_schedule)
+    with pytest.raises(SystemExit):  # fact-check 2026-10-15: no --yes; a person types INSTALL in a terminal
+        cli.build_parser().parse_args(["schedule", "install", "--mac", "--yes"])
 
 
 # ------------------------------------------------------------------ reel notify

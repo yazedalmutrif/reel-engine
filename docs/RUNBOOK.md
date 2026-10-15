@@ -39,7 +39,7 @@ All commands run from the project folder; `reel` means `.venv\Scripts\reel.exe` 
 | `reel refresh-token [--json]` | Refresh the 60-day token now (the weekly job does this automatically) |
 | `reel secret set <name> --stdin` | Store a secret (used by `scripts/set-secret.ps1`) |
 | `reel schedule plist [--out DIR]` | macOS: write the three launchd jobs to `data/launchd/` (nothing is loaded) and print the install commands |
-| `reel schedule install --mac [--yes]` / `uninstall --mac` | macOS: copy the jobs to `~/Library/LaunchAgents` and load them with `launchctl bootstrap` (you type `INSTALL`), or unload and remove them (`UNINSTALL`). **Only after Yazeed's OK** |
+| `reel schedule install --mac` / `uninstall --mac` | macOS: copy the jobs to `~/Library/LaunchAgents` and load them with `launchctl bootstrap` (you type `INSTALL`), or unload and remove them (`UNINSTALL`). **Only after Yazeed's OK** |
 | `reel schedule status [--mac]` | Read-only: launchd state (macOS) or the Windows Task Scheduler tasks |
 | `reel notify test [--channel dashboard\|desktop\|telegram\|all]` | Send one test notification and print which channels worked |
 | `reel notify setup-telegram [--stdin] [--verify]` / `reel notify telegram-chat-id` | Optional Telegram: store the bot token (hidden input) in the Keychain / Credential Manager; list the chat ids that wrote to the bot. Telegram stays off until `[notify] telegram = true` and `telegram_chat_ids` are set |

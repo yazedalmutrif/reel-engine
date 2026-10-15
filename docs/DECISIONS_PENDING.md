@@ -68,6 +68,7 @@ Built by tech-lead and team; dates by researcher; rulings by legal-compliance (2
 ## PD-15: Small fixes found on the way
 - Six tests depended on the wall clock (quiet hours 00:30-11:00) and failed in the morning; they now inject `now`, and `jobs._published_today` follows the injected `now`. Checked at 7 times of day.
 - `tests/conftest.py` now blocks real Claude CLI calls (the CLI is found on the Mac; one early test run made one real call with only example-pack data before the guard existed) and any call to api.telegram.org.
+- Fact-check fixes (2026-10-15): prompt `<data>` blocks for `accounts` and `recommend` escape `<`/`>` in the whole input and pseudonymise trend titles (a trend title could close the block and carry a handle/URL); `recommend` leaves `brain_reserve_calls` free; `reel schedule install/uninstall --mac` has no `--yes` (a person types the phrase in a terminal); the Link-account job map keeps at most 50 states; the reminder never re-sends after an error inside notify; one checklist line reworded so no seed reminder trips the Telegram URL rule; `setup-mac.sh` avoids a SIGPIPE false negative under `pipefail`.
 - New hold rule `occasion.pride_content` (legal-compliance 2026-10-15: Anti-Cybercrime Law art. 6(1), Audiovisual Media Law art. 5), tested not to catch «فخور» or «ميمز».
 
 ## Open (✍️ for Yazeed)

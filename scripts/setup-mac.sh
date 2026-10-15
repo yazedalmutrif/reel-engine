@@ -159,11 +159,11 @@ check_build() {  # $1 = ffmpeg binary
   local conf f missing=""
   conf="$("$1" -hide_banner -buildconf 2>&1)" || return 1
   for f in "${REQUIRED_FLAGS[@]}"; do
-    printf '%s' "$conf" | grep -q -- "$f" || missing="$missing $f"
+    grep -q -- "$f" <<<"$conf" || missing="$missing $f"
   done
   [ -z "$missing" ] || { echo "  missing configure flags:$missing" >&2; return 1; }
   ok "build flags: ${REQUIRED_FLAGS[*]}"
-  if printf '%s' "$conf" | grep -q -- --enable-libfribidi; then
+  if grep -q -- --enable-libfribidi <<<"$conf"; then
     ok "FriBidi: --enable-libfribidi"
   else
     local shaper

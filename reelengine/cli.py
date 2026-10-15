@@ -616,11 +616,11 @@ INSTALL_PHRASE = "INSTALL"
 UNINSTALL_PHRASE = "UNINSTALL"
 
 
-def _confirm(phrase: str, yes: bool) -> bool:
-    if yes:
-        return True
+def _confirm(phrase: str) -> bool:
+    """A person types the phrase in a terminal. No flag skips it (fact-check 2026-10-15): an agent or a
+    script can't create or remove scheduled jobs on its own."""
     if not sys.stdin.isatty():
-        print(f"Refusing: no terminal to confirm. Re-run in a terminal and type {phrase}, or pass --yes.")
+        print(f"Refusing: no terminal to confirm. Re-run it yourself in a terminal and type {phrase}.")
         return False
     return input(f"Type {phrase} to continue: ").strip() == phrase
 
@@ -678,7 +678,7 @@ def cmd_schedule(cfg, a) -> int:
         tzw = macsched.tz_warning(cfg)
         if tzw:
             print(f"WARNING: {tzw}")
-        if not _confirm(INSTALL_PHRASE, a.yes):
+        if not _confirm(INSTALL_PHRASE):
             print("Not installed.")
             return 1
         for line in macsched.install(cfg):
@@ -686,7 +686,7 @@ def cmd_schedule(cfg, a) -> int:
         print("Check with: reel schedule status --mac")
         return 0
     print(f"This will boot out the 3 Reel Engine launchd jobs and delete their plists from {macsched.agents_dir()}.")
-    if not _confirm(UNINSTALL_PHRASE, a.yes):
+    if not _confirm(UNINSTALL_PHRASE):
         print("Nothing changed.")
         return 1
     for line in macsched.uninstall():
@@ -863,7 +863,6 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("action", choices=["plist", "install", "uninstall", "status"])
     sp.add_argument("--mac", action="store_true", help="act on macOS launchd (install/uninstall need it)")
     sp.add_argument("--out", help="plist: output folder (default data/launchd)")
-    sp.add_argument("--yes", action="store_true", help="install/uninstall: skip the typed confirmation")
     sp = add("notify", cmd_notify, "notifications: setup-telegram | telegram-chat-id | test", json_flag=False)
     sp.add_argument("action", choices=["setup-telegram", "telegram-chat-id", "test"])
     sp.add_argument("--stdin", action="store_true", help="setup-telegram: read the token from one stdin line")
