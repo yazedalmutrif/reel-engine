@@ -1,6 +1,6 @@
 # Runbook
 
-All commands run from the project folder in PowerShell; `reel` means `.venv\Scripts\reel.exe`. Add `--json` for machine-readable output (agents: video-editor, growth-analyst, social-director). Exit codes: 0 ok, 1 something needs attention, 2 refused or error.
+All commands run from the project folder; `reel` means `.venv\Scripts\reel.exe` in PowerShell on Windows, or `.venv/bin/reel` in Terminal on macOS. Add `--json` for machine-readable output (agents: video-editor, growth-analyst, social-director). Exit codes: 0 ok, 1 something needs attention, 2 refused or error.
 
 ## Commands
 | Command | What it does |
@@ -27,8 +27,10 @@ All commands run from the project folder in PowerShell; `reel` means `.venv\Scri
 | `reel calendar list \| upcoming [--days N] [--json]` | The Saudi occasions calendar; `upcoming` = the next N days (default 21), with Hijri dates and film-by dates |
 | `reel calendar add --name-ar … --name-en … --rule gregorian\|hijri\|once --month M --day D [--year Y] --category … [--official yes\|no] [--angle …] [--source-url https://…] [--checked-on YYYY-MM-DD] [--keywords "a, b"]` | Add a day. Hijri days are converted with Umm al-Qura (±1 day: moon sighting) |
 | `reel calendar edit --slug <id> [any field]` / `reel calendar delete --slug <id>` | Edit or delete (a deleted seed day stays deleted on reseed) |
-| `reel calendar seed` | Load `occasions.yaml` from the brand pack (else `brand/occasions.yaml`); only adds days the DB has never seen |
-| `reel accounts list \| attach <user> --role own\|reference\|competitor \| forget <user>` | Attached Instagram accounts. `forget` deletes the account and every stored post now |
+| `reel calendar seed` | Load `occasions.yaml` from the brand pack (else `brand/occasions.yaml`): adds days the DB has never seen and refreshes seed days you never edited (v1.2). Your edits and deletions are never touched |
+| `reel calendar remind [--dry-run] [--json]` | Send today's "day coming up" reminders now (the daily job does this). Leads `[calendar] remind_days` (default 14, 7, 3, 0 days before); each lead once per occurrence; a lead missed while the computer was off is skipped, never sent late. `--dry-run` prints what would be sent and changes nothing |
+| `reel accounts list \| attach <user> --role own\|reference\|competitor [--niche "…"] \| forget <user>` | Attached Instagram accounts. `--niche` is a short description of what the account is about (max 200 characters). `forget` deletes the account, every stored post and its recommendations now |
+| `reel accounts recommend <user> [--niche "…"] [--no-brain] [--json]` | The "What to post" plan for an attached account: 5-7 ideas (topic, hook, format, length, best time, why) and the upcoming Saudi days that fit its niche. One brain call (pseudonymised, no tools, inside the daily cap); without the brain, or with `--no-brain`, a template plan. Without imported reel numbers the plan says it's based on the description. Same as the dashboard's **Link account** button |
 | `reel accounts import [<user>] --file posts.csv\|posts.txt` | Manual import (public numbers you copied): CSV header `username,permalink,posted_at,media_type,caption,likes,comments,views,duration_s`, or lines `link \| YYYY-MM-DD HH:MM \| likes \| comments \| views \| seconds \| caption` |
 | `reel accounts analyze [--json]` | The brain analyses the attached accounts (1 call, pseudonymised, counted in the daily cap). The weekly job does this automatically when posts exist |
 | `reel accounts prune` | Apply retention now (captions after `retention_days`, rows after `metrics_retention_days`); the daily job does it too |
@@ -36,6 +38,11 @@ All commands run from the project folder in PowerShell; `reel` means `.venv\Scri
 | `reel connect [--stdin]` | Hidden-input token setup, verified with `/me`, stored in keyring |
 | `reel refresh-token [--json]` | Refresh the 60-day token now (the weekly job does this automatically) |
 | `reel secret set <name> --stdin` | Store a secret (used by `scripts/set-secret.ps1`) |
+| `reel schedule plist [--out DIR]` | macOS: write the three launchd jobs to `data/launchd/` (nothing is loaded) and print the install commands |
+| `reel schedule install --mac` / `uninstall --mac` | macOS: copy the jobs to `~/Library/LaunchAgents` and load them with `launchctl bootstrap` (you type `INSTALL`), or unload and remove them (`UNINSTALL`). **Only after Yazeed's OK** |
+| `reel schedule status [--mac]` | Read-only: launchd state (macOS) or the Windows Task Scheduler tasks |
+| `reel notify test [--channel dashboard\|desktop\|telegram\|all]` | Send one test notification and print which channels worked |
+| `reel notify setup-telegram [--stdin] [--verify]` / `reel notify telegram-chat-id` | Optional Telegram: store the bot token (hidden input) in the Keychain / Credential Manager; list the chat ids that wrote to the bot. Telegram stays off until `[notify] telegram = true` and `telegram_chat_ids` are set |
 | `reel order <amount> [--item ...] [--note ...] [--date ...]` | Record a manual order (Money tab) |
 
 ## Reel states
@@ -53,8 +60,10 @@ All commands run from the project folder in PowerShell; `reel` means `.venv\Scri
 | Nothing happens | `reel status` → `reel doctor` → `Get-ScheduledTaskInfo -TaskName 'Brain - Reel Engine Tick'`; logs are in `data\logs\engine.log` |
 | Upload a clip from the browser | `reel dashboard --open` → Pipeline → **Upload a clip** (or the **Upload clip** button in the header). The file lands in the inbox and the next ticks take it in exactly like a OneDrive clip: stability check, sha256 dedupe, `data/raw`, every QA gate. Uploading never schedules or posts anything, and dry-run stays on. A clip you already uploaded is reported as a duplicate |
 | An upload fails | The message says why: wrong type (only .mp4/.mov/.m4v), too big (`[upload] max_mb`), not enough disk (`[upload] min_free_gb`), "reload the page" (the CSRF token changes when the dashboard restarts) |
-| An occasion is coming up | The daily job sends one reminder 3-21 days ahead; the weekly brief adds at most one or two occasion scripts and the occasion checklist. A reel about the occasion (its name or match words in the topic, hook, title or caption) is scheduled from `post_window_days` before the day to its last day |
+| An occasion is coming up | The daily job sends a reminder 14, 7 and 3 days before and on the day, each with 2-3 ready-to-film ideas and the legal checklist (dashboard **Coming up**, desktop notification, Telegram if set up); the weekly brief adds at most one or two occasion scripts and the occasion checklist. A reel about the occasion (its name or match words in the topic, hook, title or caption) is scheduled from `post_window_days` before the day to its last day |
 | A reel is held by `occasion.*` or `copy_guard` | `occasion.*`: the flag/Shahada/emblem/leader/religion rules or an occasion next to an offer (see `brand/gates_occasions.yaml`). `copy_guard`: the caption or hook copies a stored reference/competitor caption. Rewrite and re-film; these can't be approved away |
+| Link an account and get ideas | Dashboard → **Link account** (header or Accounts tab): type the @username, a short description of the account, optionally paste reels or choose a CSV, then **Link and analyse**. It attaches, imports, and writes the **What to post** card (up to ~2 minutes; closing the dialog doesn't stop it). Official API only: nothing is fetched from Instagram |
+| A reel is held by `occasion.pride_content` | Pride/LGBT content is held (legal risk in KSA, legal-compliance 2026-10-15). It can't be approved away |
 | Restore a backup | Stop the tasks (below), copy `data\backups\engine-<stamp>.sqlite` over `data\engine.sqlite`, start the tasks |
 
 ## Scheduled tasks (Windows Task Scheduler)
@@ -73,19 +82,29 @@ Working folder: the project root. Settings: wake to run, start when available, n
 - Remove: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\unregister-tasks.ps1 [-WhatIf] [-Force]`
 - After a Windows password change (only if registered with `-RunWhetherLoggedOn`): run `register-tasks.ps1 -RunWhetherLoggedOn` again.
 
-## Secrets (Windows Credential Manager, keyring service "ReelEngine")
+## Scheduled jobs on macOS (launchd)
+Same jobs as Windows: `local.reelengine.tick` (every 15 min at :00 :15 :30 :45), `local.reelengine.daily` (03:30), `local.reelengine.weekly` (Saturday 20:00). launchd uses the Mac's clock, so keep the Mac on Asia/Riyadh time (`reel schedule status --mac` warns if it isn't). They run only while Yazeed is logged in; a run missed during sleep runs once on wake; a run missed while the Mac is off is skipped. Logs: `data/logs/launchd-<job>.log`.
+- Preview: `reel schedule plist` (writes `data/launchd/*.plist`; check with `plutil -lint`)
+- Load: `reel schedule install --mac` (type `INSTALL`) — **not done; needs Yazeed's OK**
+- Status: `reel schedule status --mac` · Run now: `launchctl kickstart gui/$(id -u)/local.reelengine.tick`
+- Remove: `reel schedule uninstall --mac`
+
+## Secrets (Windows Credential Manager / macOS Keychain, keyring service "ReelEngine")
 - Connect Instagram: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\connect-instagram.ps1`
 - Any other secret (`ig_app_secret | telegram_bot_token | fb_discovery_token`; the Instagram token goes through `connect-instagram.ps1`): `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\set-secret.ps1 -Name <name>`. The input is hidden and passed on stdin only; the script prints only "stored" or the error.
 - Never paste a token into a command line, a file, `config.toml` or a chat. Tests use the service `ReelEngine-Test`.
 
 ## Notifications
-Every notification is a DB row (shown on the dashboard, with tokens masked) plus a Windows toast when `[notify].toast = true`. Toasts appear as "Windows PowerShell"; Focus/Do Not Disturb can hide them, so the dashboard is the reliable place to look. Telegram is v2 and stays off.
+Every notification is a DB row (shown on the dashboard, with tokens masked) plus a desktop notification when `[notify].toast = true`: a Windows toast (shown as "Windows PowerShell") or, on macOS, a Notification Center banner (shown as "Script Editor": allow it once in System Settings → Notifications). Focus / Do Not Disturb can hide them, so the dashboard is the reliable place to look.
+
+**Telegram (optional, off).** To turn it on: create a bot with @BotFather → `reel notify setup-telegram` (paste the token; hidden) → send `/start` to the bot → `reel notify telegram-chat-id` → in `config.toml` set `[notify] telegram = true` and `telegram_chat_ids = ["<id>"]` → `reel notify test --channel telegram`. Only these kinds are sent (`telegram_kinds`, default `occasion`, `action`, `error`; `published` and `brief` are opt-in): occasion reminders with their ideas, and for every other kind the title only plus "Details on the dashboard." A message containing an @handle, a link, a home-folder path or anything secret-looking is refused, never rewritten. Nothing about other accounts (usernames, captions, analyses, Link-account plans) is ever sent. To stop: `telegram = false`, delete `telegram_bot_token` from the Keychain / Credential Manager, and revoke the token in @BotFather; old messages stay in Telegram until you clear the chat.
 
 ## Setup and repair
+macOS: `scripts/setup-mac.sh [--dry-run] [--skip-ffmpeg]` (idempotent, no sudo, no Homebrew).
 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1 [-SkipModel] [-WhatIf]`. Safe to re-run. Exit 0 = ok, 1 = a step failed, 2 = setup done but `reel doctor` reported FAIL.
 
 ## Tests
-- Fast suite: `.venv\Scripts\python.exe -m pytest -q`
+- Fast suite: `.venv\Scripts\python.exe -m pytest -q` (macOS: `.venv/bin/python -m pytest -q -p no:cacheprovider`; the suite blocks real Claude CLI and Telegram calls)
 - End-to-end with the synthetic clip (GPU + ffmpeg, no subscription use): `.venv\Scripts\python.exe -m pytest -m e2e tests\test_e2e.py -k fake`
 - End-to-end with the real brain (3 Claude calls): `.venv\Scripts\python.exe -m pytest -m "e2e and brain" tests\test_e2e.py`
 - Caption rendering QA frames: `.venv\Scripts\python.exe scripts\caption_qa.py`

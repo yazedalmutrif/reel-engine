@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Any
 
@@ -113,6 +113,17 @@ class Env:
 
     def requests_to(self, fragment: str, method: str | None = None) -> list:
         return [(m, p) for m, p in self.st.requests if fragment in p and (method is None or m == method)]
+
+
+# A fixed instant outside quiet hours (00:30-11:00 Riyadh) for the tests that go through
+# jobs.publish_due: 2026-10-14 (Wed) 15:00 Asia/Riyadh. With the real clock they failed at night.
+FROZEN_NOW = datetime(2026, 10, 14, 12, 0, tzinfo=timezone.utc)
+
+
+@pytest.fixture
+def frozen_clock(monkeypatch):
+    monkeypatch.setattr(db, "utcnow", lambda: FROZEN_NOW)
+    return FROZEN_NOW
 
 
 @pytest.fixture
@@ -317,6 +328,7 @@ def test_error_190_pauses_publishing_and_notifies_once(env, where):
 
 
 # ------------------------------------------------------------------ 7. rate limit / HTTP 500
+@pytest.mark.usefixtures("frozen_clock")
 def test_rate_limit_defers_one_hour_without_counting_a_retry(env, monkeypatch):
     rid = env.reel()
     monkeypatch.setattr(jobs, "make_publisher", lambda ctx, force_dry=False: env.pub())
@@ -438,6 +450,7 @@ def test_crash_at_every_publish_crashpoint_publishes_exactly_once(env, monkeypat
     assert env.pub().publish(rid)["already"] is True and env.st.publish_calls == 1
 
 
+@pytest.mark.usefixtures("frozen_clock")
 def test_one_publisher_for_two_reels_uploads_each_video_to_its_own_container(env, monkeypatch):
     """publish_due(limit=2) reuses one publisher: reel B (container made before a crash)
     must not be uploaded to the upload URI of reel A's container."""

@@ -53,14 +53,40 @@ class BrainProvider(Protocol):
     def run(self, task: str, prompt: str, schema: dict, *, model: str, timeout: int, tools: tuple[str, ...] = ()) -> dict: ...
 
 
+def _version_key(s: str) -> tuple:
+    return tuple(int(n) for n in s.split(".") if n.isdigit())
+
+
+def _resolve_cli_mac() -> Path | None:
+    """macOS fallbacks after PATH: the native installer, the old local install, Homebrew,
+    /usr/local, then the newest binary bundled with the Claude desktop app."""
+    home = Path.home()
+    for c in (home / ".local" / "bin" / "claude", home / ".claude" / "local" / "claude",
+              Path("/opt/homebrew/bin/claude"), Path("/usr/local/bin/claude")):
+        if c.is_file() and os.access(c, os.X_OK):
+            return c
+    pattern = str(home / "Library" / "Application Support" / "Claude" / "claude-code" / "*" / "*"
+                  / "claude.app" / "Contents" / "MacOS" / "claude")
+    cands = [Path(p) for p in glob.glob(pattern) if os.access(p, os.X_OK)]
+    if not cands:
+        return None
+    # .../claude-code/<version>/<hash>/claude.app/Contents/MacOS/claude -> parents[4] is <version>
+    return max(cands, key=lambda p: _version_key(p.parents[4].name))
+
+
 def resolve_cli(cli_path: str = "") -> Path | None:
-    """`claude` on PATH, else the newest VS Code extension binary (spec §3)."""
+    """`claude` on PATH, else (macOS) the usual install locations, else the newest
+    VS Code extension binary (spec §3)."""
     if cli_path:
         p = Path(os.path.expandvars(os.path.expanduser(cli_path)))
         return p if p.exists() else None
     found = shutil.which("claude")
     if found:
         return Path(found)
+    if sys.platform == "darwin":
+        mac = _resolve_cli_mac()
+        if mac:
+            return mac
     pattern = str(Path.home() / ".vscode" / "extensions" / "anthropic.claude-code-*" / "resources" / "native-binary" / "claude.exe")
     cands = [Path(p) for p in glob.glob(pattern)]
     if not cands:

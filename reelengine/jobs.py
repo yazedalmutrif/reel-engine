@@ -108,8 +108,8 @@ def build_dashboard(ctx: Ctx) -> str:
 
 
 # ------------------------------------------------------------------ publish
-def _published_today(ctx: Ctx) -> int:
-    start = datetime.now(ctx.cfg.tz).replace(hour=0, minute=0, second=0, microsecond=0)
+def _published_today(ctx: Ctx, now: datetime | None = None) -> int:
+    start = (now or db.utcnow()).astimezone(ctx.cfg.tz).replace(hour=0, minute=0, second=0, microsecond=0)
     start_utc = start.astimezone(db.utcnow().tzinfo).isoformat(timespec="seconds")
     return ctx.conn.execute("SELECT COUNT(*) FROM reels WHERE is_demo=0 AND state='published' AND published_at >= ?",
                             (start_utc,)).fetchone()[0]
@@ -159,7 +159,7 @@ def publish_due(ctx: Ctx, force_dry: bool = False, now: datetime | None = None, 
                 scheduler.schedule_reel(conn, cfg, rid, now=now)
                 out["outcomes"][rid] = f"rescheduled ({why})"
                 continue
-        if row["state"] == "scheduled" and _published_today(ctx) >= cfg["schedule"]["max_posts_per_day"]:
+        if row["state"] == "scheduled" and _published_today(ctx, now) >= cfg["schedule"]["max_posts_per_day"]:
             db.transition(conn, rid, "qa_passed", "daily cap reached at publish time; rescheduling")
             scheduler.schedule_reel(conn, cfg, rid, now=now)
             out["outcomes"][rid] = "rescheduled (daily cap)"

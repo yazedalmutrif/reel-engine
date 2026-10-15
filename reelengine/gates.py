@@ -97,7 +97,9 @@ def load_occasion_rules(brand_dir: Path) -> dict:
     base = GENERIC_BRAND / "gates_occasions.yaml"
     out = _yaml(base) if base.exists() else {}
     out = {"groups": dict(out.get("groups") or {}), "rules": list(out.get("rules") or []),
-           "filming_checklist": list(out.get("filming_checklist") or [])}
+           "filming_checklist": list(out.get("filming_checklist") or []),
+           "category_checklist": {str(k): list(v or []) for k, v in (out.get("category_checklist") or {}).items()},
+           "occasion_checklist": {str(k): list(v or []) for k, v in (out.get("occasion_checklist") or {}).items()}}
     own = Path(brand_dir) / "gates_occasions.yaml"
     if own.exists() and own.resolve() != base.resolve():
         extra = _yaml(own)
@@ -110,6 +112,10 @@ def load_occasion_rules(brand_dir: Path) -> dict:
             if r["id"] not in ids:
                 out["rules"].append(r)
         out["filming_checklist"] += [c for c in (extra.get("filming_checklist") or []) if c not in out["filming_checklist"]]
+        for key in ("category_checklist", "occasion_checklist"):  # v1.2: per-category / per-slug lines, add-only
+            for k, lines in (extra.get(key) or {}).items():
+                have = out[key].setdefault(str(k), [])
+                have += [c for c in (lines or []) if isinstance(c, str) and c not in have]
     return out
 
 

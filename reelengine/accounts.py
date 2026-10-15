@@ -72,22 +72,40 @@ def _next_pseudonym(conn) -> str:
     return f"ACC_{n:02d}"
 
 
-def attach(conn, username: str, role: str, source: str = "manual", notes: str = "", is_demo: bool = False) -> dict:
+MAX_NICHE = 200
+
+
+def clean_niche(niche: str | None) -> str:
+    """What the account is about, in Yazeed's words (max 200 chars, no control characters)."""
+    t = str(niche or "").strip()
+    if len(t) > MAX_NICHE:
+        raise AccountError(f"niche: max {MAX_NICHE} characters")
+    if any(ord(c) < 32 or 0x7F <= ord(c) < 0xA0 for c in t):
+        raise AccountError("niche: no control characters (one line of plain text)")
+    return t
+
+
+def attach(conn, username: str, role: str, source: str = "manual", notes: str = "", is_demo: bool = False,
+           niche: str | None = None) -> dict:
+    """Attach (or update) an account. `niche` None keeps the stored one; "" clears it."""
     u = norm_username(username)
     role = (role or "").strip().lower()
     if role not in ROLES:
         raise AccountError(f"role must be one of {', '.join(ROLES)}")
     if len(notes or "") > 300:
         raise AccountError("notes: max 300 characters")
+    nic = clean_niche(niche) if niche is not None else None
     row = conn.execute("SELECT id FROM accounts WHERE username=?", (u,)).fetchone()
     with db.tx(conn):
         if role == "own":
             conn.execute("UPDATE accounts SET role='reference' WHERE role='own' AND username<>?", (u,))
         if row:
             conn.execute("UPDATE accounts SET role=?, notes=? WHERE id=?", (role, notes or "", row["id"]))
+            if nic is not None:
+                conn.execute("UPDATE accounts SET niche=? WHERE id=?", (nic, row["id"]))
         else:
-            conn.execute("INSERT INTO accounts(username, pseudonym, role, source, notes, added_at, is_demo) VALUES(?,?,?,?,?,?,?)",
-                         (u, _next_pseudonym(conn), role, source, notes or "", db.now_iso(), int(is_demo)))
+            conn.execute("INSERT INTO accounts(username, pseudonym, role, source, notes, added_at, is_demo, niche) VALUES(?,?,?,?,?,?,?,?)",
+                         (u, _next_pseudonym(conn), role, source, notes or "", db.now_iso(), int(is_demo), nic or ""))
     return get(conn, u)
 
 
@@ -115,6 +133,7 @@ def forget(conn, username: str) -> bool:
         if not row:
             return False
         conn.execute("DELETE FROM account_media WHERE account_id=?", (row["id"],))
+        conn.execute("DELETE FROM account_recommendations WHERE account_id=?", (row["id"],))  # explicit, not only the cascade
         conn.execute("DELETE FROM accounts WHERE id=?", (row["id"],))
     log.info("accounts: forgot one account and its posts")
     return True
@@ -315,7 +334,8 @@ def prune(conn, cfg, now: datetime | None = None) -> dict:
         wiped = conn.execute("UPDATE account_media SET caption=NULL WHERE caption IS NOT NULL AND first_seen_at < ?", (cap_cut,)).rowcount
         deleted = conn.execute("DELETE FROM account_media WHERE first_seen_at < ?", (row_cut,)).rowcount
         old_an = conn.execute("DELETE FROM account_analyses WHERE created_at < ?", (row_cut,)).rowcount
-    return {"captions_wiped": wiped, "posts_deleted": deleted, "analyses_deleted": old_an}
+        old_rec = conn.execute("DELETE FROM account_recommendations WHERE created_at < ?", (row_cut,)).rowcount
+    return {"captions_wiped": wiped, "posts_deleted": deleted, "analyses_deleted": old_an, "recommendations_deleted": old_rec}
 
 
 # ------------------------------------------------------------------ pseudonymise + stats
@@ -480,7 +500,7 @@ def analyze(cfg, conn, include_demo: bool = False) -> dict:
                 errs.append(f"idea {i}: no @handles or links")
         return errs
 
-    ctx = {"input_json": json.dumps(inp, ensure_ascii=False, indent=1, default=str)}
+    ctx = {"input_json": _data_json(inp)}
     out = brain.ask(cfg, conn, "accounts", ctx, model=cfg["brain"]["review_model"], validate=validate)
     conn.execute("INSERT INTO account_analyses(created_at, json, stats_json) VALUES(?,?,?)",
                  (db.now_iso(), db.jdump(out), db.jdump({"stats": inp["stats"], "own": inp["own"]})))
@@ -577,3 +597,332 @@ class BusinessDiscoverySource:
         self.conn.execute("UPDATE accounts SET last_fetched_at=?, last_error=NULL, followers=?, media_count=?, source='api' WHERE id=?",
                           (db.now_iso(), d["followers"], d["media_count"], acc["id"]))
         return {"username": d["username"], "stored": stored}
+
+
+# ------------------------------------------------------------------ "Link account": recommendations (v1.2)
+RECOMMEND_DAYS = 60
+MAX_REC_OCCASIONS = 4
+REC_NOTE_DESCRIPTION = "Based on your description; add reel numbers for sharper advice."
+_HHMM = re.compile(r"\b([01]?\d|2[0-3]):[0-5]\d\b")
+_TECH_WORDS = ("ai", "ذكاء", "اصطناعي", "تقني", "تقنيه", "تقنية", "برمج", "مبرمج", "code", "coding", "developer", "dev", "data",
+               "بيانات", "tech", "cyber", "سيبراني", "software", "app", "تطبيق", "chatgpt", "claude", "python")
+_CAREER_WORDS = ("وظيف", "وظايف", "وظائف", "career", "careers", "job", "jobs", "student", "students", "طلاب", "طالب", "خريج",
+                 "graduate", "grads", "cv", "سيره", "مقابل", "interview", "توظيف", "hiring", "شغل")
+_STOP = {"the", "and", "for", "with", "about", "from", "into", "your", "you", "this", "that", "على", "في", "من", "عن", "الى",
+         "مع", "او", "هذا", "هذي", "اللي", "ال", "حساب", "account", "content", "محتوى", "saudi", "سعودي", "السعوديه",
+         "السعودية", "my", "our", "people", "الناس"}
+REC_FORMATS = {"problem": "talking head", "bold_claim": "talking head", "list_number": "list on screen",
+               "story": "story time", "pov_before_after": "before/after split", "question": "talking head"}
+REC_HOOKS = {
+    "problem": ("The most common {kw} mistake", "أكثر غلطة يسويها الناس في {kw}، وكيف تتجنبها"),
+    "bold_claim": ("{kw}: myth vs reality", "أشهر فكرة غلط عن {kw}، والصح بدقيقة"),
+    "list_number": ("3 things to know about {kw}", "ثلاث أشياء لازم تعرفها عن {kw}"),
+    "story": ("A short {kw} story", "قصة قصيرة: أول مرة جربت {kw} (✍️ قصتك أنت)"),
+    "pov_before_after": ("{kw}: before vs after", "قبل وبعد: {kw} لما تسويه صح"),
+    "question": ("Where to start with {kw}", "وش أول خطوة لو تبي تبدأ في {kw}؟"),
+}
+
+
+def _norm_words(text: str) -> list[str]:
+    from .gates import normalize
+
+    return [w for w in re.findall(r"[\w؀-ۿ]+", normalize(text or "")) if len(w) >= 2]
+
+
+def niche_keywords(niche: str, k: int = 3) -> list[str]:
+    """Short phrases from the niche's own words: each run of non-stop words, cut to 2 words
+    ("AI tools and careers for Saudi students" -> ["AI tools", "careers", "students"])."""
+    from .gates import normalize
+
+    stop = {normalize(x) for x in _STOP}
+    text = _URL.sub(" ", _MENTION.sub(" ", niche or ""))
+    runs: list[list[str]] = [[]]
+    for w in re.findall(r"[\w؀-ۿ]+", text):
+        n = normalize(w)
+        keep = (len(n) >= 3 or n in ("ai", "cv", "ux", "ui")) and n not in stop and not n.isdigit()
+        if keep:
+            runs[-1].append(w)
+        elif runs[-1]:
+            runs.append([])
+    out: list[str] = []
+    for phrase in (" ".join(r[i:i + 2]) for r in runs for i in range(0, len(r), 2)):
+        if phrase and phrase.lower() not in [o.lower() for o in out]:
+            out.append(phrase)
+    return out[:k]
+
+
+def _has_any(words: list[str], keys: tuple[str, ...]) -> bool:
+    joined = " ".join(words)
+    return any((k in words) if re.match(r"^[a-z]+$", k) else (k in joined) for k in keys)
+
+
+def fitting_occasions(conn, cfg, niche: str, today=None, days: int = RECOMMEND_DAYS, k: int = MAX_REC_OCCASIONS) -> list:
+    """Deterministic: occurrences starting in the next `days` days, scored by keyword overlap between the
+    normalised niche and the occasion's names/keywords/angle, plus a category bonus (tech/AI niche -> tech;
+    careers/students/jobs -> career; every niche gets the national days). Top k by score, then date."""
+    from . import occasions as oc
+
+    today = today or oc.local_today(cfg)
+    words = _norm_words(niche)
+    from .gates import normalize
+
+    stop = {normalize(x) for x in _STOP}
+    wset = {w for w in words if len(w) >= 3 and w not in stop}
+    tech, career = _has_any(words, _TECH_WORDS), _has_any(words, _CAREER_WORDS)
+    scored = []
+    for x in oc.between(oc.all_occasions(conn, include_demo=False), today, today + timedelta(days=days), today):
+        if x.days_until < 0:
+            continue
+        o = x.occasion
+        owords = set(_norm_words(" ".join([o["name_ar"], o["name_en"], o.get("angle") or "", *(o.get("keywords") or [])])))
+        score = 2 * len(wset & owords)
+        cat = o["category"]
+        if cat == "national":
+            score += 2
+        if cat == "tech" and tech:
+            score += 3
+        if cat == "career" and career:
+            score += 3
+        if score > 0:
+            scored.append((score, x))
+    scored.sort(key=lambda t: (-t[0], t[1].start, t[1].occasion["slug"]))
+    seen, out = set(), []
+    for _, x in scored:
+        if x.occasion["slug"] not in seen:
+            seen.add(x.occasion["slug"])
+            out.append(x)
+        if len(out) >= k:
+            break
+    return out
+
+
+def _ranked_arms(conn, pb: dict, dim: str) -> list[str]:
+    """Arms of a playbook dimension by posterior mean (deterministic; no sampling, nothing logged)."""
+    arms = [a for a in (pb.get("arms") or {}).get(dim, []) if not a.get("retired")]
+    means = {}
+    try:
+        for r in conn.execute("SELECT arm, alpha, beta FROM bandit_arms WHERE dimension=?", (dim,)):
+            means[r["arm"]] = r["alpha"] / (r["alpha"] + r["beta"])
+    except Exception as exc:  # noqa: BLE001 - no bandit table yet: playbook order
+        log.debug("bandit arms unavailable: %s", exc)
+    order = {str(a["id"]): i for i, a in enumerate(arms)}
+    return sorted(order, key=lambda a: (-means.get(a, 0.5), not any(x.get("preferred") or x.get("prior_favourite") for x in arms if str(x["id"]) == a), order[a]))
+
+
+def _playbook_bits(conn, cfg) -> dict:
+    from . import learner
+
+    try:
+        pb = learner.load_playbook(conn, cfg)
+    except Exception as exc:  # noqa: BLE001 - no playbook file: fall back to the schedule config
+        log.warning("recommend: playbook unavailable (%s)", exc)
+        pb = {}
+    slots_by_id = {str(a["id"]): a for a in (pb.get("arms") or {}).get("slot", [])}
+    slots = [slots_by_id[s] for s in _ranked_arms(conn, pb, "slot")][:3] if pb else []
+    bands = {str(a["id"]): a for a in (pb.get("arms") or {}).get("duration_band", [])}
+    return {"rules": [f"{r['id']}: {r['text']}" for r in (pb.get("rules") or [])][:20],
+            "hook_types": _ranked_arms(conn, pb, "hook_type") if pb else list(REC_HOOKS),
+            "slots": [{"day_type": s.get("day_type"), "time": s.get("time")} for s in slots],
+            "bands": [b for b in _ranked_arms(conn, pb, "duration_band")] if pb else [],
+            "band_defs": bands}
+
+
+def _account_posts(conn, acc: dict, names: dict[str, str], tz, limit: int = 15) -> list[dict]:
+    rows = conn.execute("SELECT * FROM account_media WHERE account_id=? ORDER BY posted_at DESC LIMIT ?", (acc["id"], limit)).fetchall()
+    return [{"post": f"{acc['pseudonym']}-P{k}", "type": r["media_type"],
+             "posted_riyadh": db.parse_ts(r["posted_at"]).astimezone(tz).strftime("%a %H:%M") if r["posted_at"] else None,
+             "length_s": r["duration_s"], "views": r["views"], "likes": r["likes"], "comments": r["comments"],
+             "caption": pseudonymise(r["caption"], names)[:400] if r["caption"] else None} for k, r in enumerate(rows, 1)]
+
+
+def recommend_input(cfg, conn, username: str, niche: str | None = None, today=None) -> dict:
+    """Everything the recommendation uses, pseudonymised: the account appears only as its ACC_ id;
+    usernames, @mentions and links in the niche text and captions are replaced (pseudonymise())."""
+    from .brief import latest_trends
+
+    acc = get(conn, username)
+    if acc is None:
+        raise AccountError(f"@{norm_username(username)} is not attached: run `reel accounts attach {norm_username(username)} --niche \"...\"` first")
+    names = {a["username"]: a["pseudonym"] for a in list_accounts(conn, include_demo=True)}
+    raw_niche = clean_niche(niche if niche is not None else (acc.get("niche") or ""))
+    stats = next((s for s in account_stats(conn, cfg) if s["account"] == acc["pseudonym"]), None) or {}
+    stats = {k: v for k, v in stats.items() if k != "username"}
+    has_numbers = conn.execute("SELECT 1 FROM account_media WHERE account_id=? AND (views IS NOT NULL OR likes IS NOT NULL) LIMIT 1",
+                               (acc["id"],)).fetchone() is not None
+    pbits = _playbook_bits(conn, cfg)
+    try:
+        trends = [{"title": pseudonymise(str(t.get("title") or "")[:160], {}), "date": t.get("published_date")} for t in (latest_trends(conn).get("items") or [])][:10]
+    except Exception:  # noqa: BLE001
+        trends = []
+    occ = fitting_occasions(conn, cfg, raw_niche, today)
+    return {
+        "_account": acc, "_raw_niche": raw_niche, "_occurrences": occ,
+        "account": acc["pseudonym"], "role": acc["role"], "basis": "numbers" if has_numbers else "description",
+        "niche": pseudonymise(raw_niche, names)[:MAX_NICHE],
+        "stats": stats if has_numbers else {"posts": stats.get("posts", 0)},
+        "posts": _account_posts(conn, acc, names, cfg.tz) if has_numbers else [],
+        "playbook_rules": pbits["rules"], "best_slots": pbits["slots"], "hook_types": pbits["hook_types"],
+        "duration_bands": pbits["bands"], "trends": trends,
+        "occasions": [{"id": x.occasion["slug"], "name_ar": x.occasion["name_ar"], "name_en": x.occasion["name_en"],
+                       "date": x.start.isoformat(), "category": x.occasion["category"], "keywords": list(x.occasion.get("keywords") or [])[:8],
+                       "angle": x.occasion.get("angle") or "", "official": bool(x.occasion["official"])} for x in occ],
+    }
+
+
+def _best_times(inp: dict, cfg) -> list[str]:
+    if inp["basis"] == "numbers" and inp["stats"].get("top_hours"):
+        return list(inp["stats"]["top_hours"])
+    if inp["best_slots"]:
+        return [f"{s['time']} ({s['day_type']})" for s in inp["best_slots"]]
+    return [cfg["schedule"]["quiet_end"]]
+
+
+def _length_text(inp: dict) -> str:
+    if inp["basis"] == "numbers" and inp["stats"].get("median_length_s"):
+        return f"~{inp['stats']['median_length_s']:.0f} s (your median)"
+    return f"{inp['duration_bands'][0]} s" if inp["duration_bands"] else "30-45 s"
+
+
+def template_recommendation(cfg, brand, inp: dict) -> dict:
+    """Deterministic 5 ideas from the niche keywords + playbook hook types + best slots + fitting occasions."""
+    from .gates import run_content_gates
+
+    kws = niche_keywords(inp["_raw_niche"]) or ["المحتوى التقني"]
+    times = _best_times(inp, cfg)
+    length = _length_text(inp)
+    hooks = [h for h in inp["hook_types"] if h in REC_HOOKS] or list(REC_HOOKS)
+    ideas = []
+    occ = inp["occasions"]
+    n_occ = 1 if occ else 0
+    for i in range(5 - n_occ):
+        ht = hooks[i % len(hooks)]
+        kw = kws[i % len(kws)]
+        topic, hook = (t.format(kw=kw) for t in REC_HOOKS[ht])
+        if brand is not None and any(h.severity == "hard" for h in run_content_gates({"script": hook}, None, cfg, brand)):
+            topic, hook = (t.format(kw="المحتوى التقني") for t in REC_HOOKS[ht])
+        ideas.append({"topic": topic, "hook_line": hook, "format": REC_FORMATS.get(ht, "talking head"), "length": length,
+                      "best_time": times[i % len(times)],
+                      "why": f"'{ht}' hooks rank {hooks.index(ht) + 1} of {len(hooks)} in the playbook; the topic comes from your description."})
+    if occ:
+        o = occ[0]
+        ideas.append({"topic": f"{o['name_en']} ({o['date']})", "hook_line": f"{o['name_ar']}: وش علاقته بـ{kws[0]}؟",
+                      "format": "talking head", "length": length, "best_time": times[0],
+                      "why": f"Coming up on {o['date']} and it fits your niche; post it 1-2 days before."})
+    if brand is not None:  # an occasion idea that trips a gate falls back to a neutral hook
+        for idea in ideas:
+            if any(h.severity == "hard" for h in run_content_gates({"script": idea["hook_line"]}, None, cfg, brand)):
+                idea["hook_line"] = "فكرة مقطع عن المحتوى التقني"
+    basis = "your reel numbers" if inp["basis"] == "numbers" else "your description"
+    return {"ideas": ideas, "occasions": [{"slug": o["id"], "angle": o["angle"]} for o in occ],
+            "summary": f"Starter plan from {basis}, the playbook, the latest trends and the calendar (no brain call)."}
+
+
+def _rec_problems(out: dict, inp: dict, cfg, brand, captions: list[str]) -> list[str]:
+    from .gates import run_content_gates
+
+    errs = []
+    ids = {o["id"] for o in inp["occasions"]}
+    for i, idea in enumerate(out["ideas"], 1):
+        blob = " ".join(str(v) for v in idea.values())
+        if _MENTION.search(blob) or _URL.search(blob):
+            errs.append(f"idea {i}: no @handles or links")
+        if captions and copy_overlap(f"{idea['topic']} {idea['hook_line']}", captions) >= COPY_THRESHOLD:
+            errs.append(f"idea {i}: copies a caption; write an original idea")
+        if brand is not None:
+            for h in run_content_gates({"script": idea["hook_line"]}, None, cfg, brand):
+                if h.severity == "hard":
+                    errs.append(f"idea {i}: hook line breaks a rule: {h.reason} ('{h.match}')")
+        if not _HHMM.search(idea["best_time"]):
+            errs.append(f"idea {i}: best_time must contain a time like 21:30")
+    for o in out["occasions"]:
+        if o["slug"] not in ids:
+            errs.append(f"unknown occasion id {o['slug']} (use only the ids given)")
+        if _MENTION.search(o["angle"]) or _URL.search(o["angle"]):
+            errs.append(f"occasion {o['slug']}: no @handles or links")
+    if _MENTION.search(out["summary"]) or _URL.search(out["summary"]):
+        errs.append("summary: no @handles or links")
+    return errs
+
+
+def _data_json(obj) -> str:
+    """JSON for a prompt's <data> block: no text inside can close the block (fact-check 2026-10-15)."""
+    return json.dumps(obj, ensure_ascii=False, indent=1, default=str).replace("<", "‹").replace(">", "›")
+
+
+def _brain_reserve_ok(cfg, conn) -> bool:
+    """Leave [calendar] brain_reserve_calls free for reel processing (Link account can be clicked a lot)."""
+    from . import brain
+
+    left = int(cfg["brain"]["max_calls_per_day"]) - brain.calls_today(conn)
+    return left >= int(cfg.get("calendar.brain_reserve_calls", 10))
+
+
+def recommend(cfg, conn, username: str, niche: str | None = None, *, use_brain: bool = True, today=None) -> dict:
+    """Recommendations for one attached account; stored in account_recommendations. One brain call (task
+    'recommend', no tools, schema-validated, counted in the daily cap) or, without the brain / at the cap /
+    on any brain error, the deterministic template. The username never goes into the prompt."""
+    from . import brain
+    from .gates import load_brand
+
+    inp = recommend_input(cfg, conn, username, niche, today)
+    acc = inp["_account"]
+    if niche is not None and inp["_raw_niche"] != (acc.get("niche") or ""):
+        conn.execute("UPDATE accounts SET niche=? WHERE id=?", (inp["_raw_niche"], acc["id"]))
+    try:
+        brand = load_brand(cfg.brand_dir)
+    except Exception:  # noqa: BLE001
+        brand = None
+    out, source = None, "template"
+    if use_brain and not _brain_reserve_ok(cfg, conn):
+        log.info("recommend: fewer than brain_reserve_calls left in the 24 h cap; using the template")
+        use_brain = False
+    if use_brain:
+        caps = stored_captions(conn) + [r[0] for r in conn.execute(
+            "SELECT caption FROM account_media WHERE account_id=? AND caption IS NOT NULL", (acc["id"],))]
+        public = {k: v for k, v in inp.items() if not k.startswith("_")}
+        ctx = {"basis": inp["basis"], "input_json": _data_json(public)}
+        try:
+            out = brain.ask(cfg, conn, "recommend", ctx, model=cfg["brain"]["review_model"],
+                            validate=lambda o: _rec_problems(o, inp, cfg, brand, caps))
+            source = "brain"
+        except brain.BrainError as exc:  # no CLI, cap reached, invalid answers
+            log.warning("recommend: brain unavailable, using the template (%s)", str(exc)[:200])
+    if out is None:
+        out = template_recommendation(cfg, brand, inp)
+    angles = {o["slug"]: o["angle"] for o in out.get("occasions") or []}
+    rec = {"niche": inp["_raw_niche"], "ideas": out["ideas"], "summary": out.get("summary") or "",
+           "occasions": [{"slug": x.occasion["slug"], "start": x.start.isoformat(),
+                          "angle": angles.get(x.occasion["slug"]) or x.occasion.get("angle") or ""} for x in inp["_occurrences"]]}
+    conn.execute("INSERT INTO account_recommendations(account_id, created_at, basis, source, json) VALUES(?,?,?,?,?)",
+                 (acc["id"], db.now_iso(), inp["basis"], source, db.jdump(rec)))
+    return latest_recommendation(conn, acc["username"], cfg=cfg, today=today)
+
+
+def latest_recommendation(conn, username: str, *, cfg=None, today=None) -> dict | None:
+    """{created, basis, source, niche, ideas, occasions:[{slug,name_ar,name_en,start,days_until,angle}], note, summary}."""
+    try:
+        acc = get(conn, username)
+        if acc is None:
+            return None
+        r = conn.execute("SELECT created_at, basis, source, json FROM account_recommendations WHERE account_id=? ORDER BY id DESC LIMIT 1",
+                         (acc["id"],)).fetchone()
+    except Exception:  # noqa: BLE001 - DB from before v3
+        return None
+    if not r:
+        return None
+    data = db.jload(r["json"], {}) or {}
+    from datetime import date as _date
+
+    from . import occasions as oc
+
+    if today is None:
+        today = oc.local_today(cfg) if cfg is not None else db.utcnow().date()
+    occs = []
+    for o in data.get("occasions") or []:
+        row = oc.get(conn, o["slug"])
+        start = _date.fromisoformat(o["start"])
+        occs.append({"slug": o["slug"], "name_ar": row["name_ar"] if row else o["slug"], "name_en": row["name_en"] if row else o["slug"],
+                     "start": o["start"], "days_until": (start - today).days, "angle": o.get("angle") or ""})
+    return {"created": r["created_at"], "basis": r["basis"], "source": r["source"], "niche": acc.get("niche") or data.get("niche") or "",
+            "ideas": data.get("ideas") or [], "occasions": occs, "summary": data.get("summary") or "",
+            "note": REC_NOTE_DESCRIPTION if r["basis"] == "description" else ""}

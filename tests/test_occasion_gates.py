@@ -116,3 +116,32 @@ def test_pack_rule_missing_a_field_is_refused(tmp_path, missing):
     (tmp_path / "gates_occasions.yaml").write_text(yaml.safe_dump({"rules": [rule]}, allow_unicode=True), encoding="utf-8")
     with pytest.raises(ValueError, match="needs id, match and reason"):
         load_occasion_rules(tmp_path)
+
+
+# ------------------------------------------------------------------ v1.2 (legal-compliance 2026-10-15)
+@pytest.mark.parametrize("text", ["مقطع عن شهر الفخر", "Happy Pride Month", "فلم عن مجتمع الميم", "lgbtq+ rights"])
+def test_pride_content_is_held(text):
+    from reelengine.gates import check_occasion_rules, load_occasion_rules
+    from reelengine.config import PACKAGE_ROOT
+
+    hits = check_occasion_rules({"caption": text}, load_occasion_rules(PACKAGE_ROOT / "brand"))
+    assert [h.rule for h in hits] == ["occasion.pride_content"] and hits[0].severity == "hard"
+
+
+@pytest.mark.parametrize("text", ["فخور جدًا بفريق سياق", "الفخر بالإنجاز", "ميمز عن البرمجة", "الطريقة المثلى للمذاكرة"])
+def test_pride_rule_leaves_everyday_words_alone(text):
+    from reelengine.gates import check_occasion_rules, load_occasion_rules
+    from reelengine.config import PACKAGE_ROOT
+
+    hits = check_occasion_rules({"caption": text}, load_occasion_rules(PACKAGE_ROOT / "brand"))
+    assert not [h for h in hits if h.rule == "occasion.pride_content"]
+
+
+def test_every_per_day_checklist_names_a_seed_day():
+    import yaml
+    from reelengine.config import PACKAGE_ROOT
+    from reelengine.gates import load_occasion_rules
+
+    seed = {o["slug"] for o in yaml.safe_load((PACKAGE_ROOT / "brand" / "occasions.yaml").read_text(encoding="utf-8"))["occasions"]}
+    extra = load_occasion_rules(PACKAGE_ROOT / "brand")["occasion_checklist"]
+    assert extra and set(extra) <= seed

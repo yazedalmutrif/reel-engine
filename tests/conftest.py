@@ -69,6 +69,40 @@ def _no_crash_env(monkeypatch):
     monkeypatch.delenv("REELENGINE_CRASH_AT", raising=False)
 
 
+@pytest.fixture(autouse=True)
+def _no_real_brain(request, monkeypatch):
+    """The claude CLI is found on this Mac (Claude app bundle), so a test that reaches brain.ask without a
+    FakeBrain would make a REAL call on Yazeed's subscription. Block it unless the test is marked `brain`."""
+    if request.node.get_closest_marker("brain"):
+        return
+    from reelengine import brain
+
+    real_get = brain.get_provider
+
+    def _guarded(cfg):
+        # the real CLI provider is only ever built here; a FakeBrain (set_provider) passes through
+        if brain._provider_override is None:
+            raise brain.BrainError("real claude CLI calls are blocked in unit tests (install a FakeBrain)")
+        return real_get(cfg)
+
+    monkeypatch.setattr(brain, "get_provider", _guarded)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_telegram(monkeypatch):
+    """No test may reach the real Telegram Bot API (tests inject a fake session instead)."""
+    import requests
+
+    real = requests.Session.request
+
+    def guarded(self, method, url, *a, **k):
+        if "api.telegram.org" in str(url):
+            raise AssertionError("a test tried to call the real Telegram API")
+        return real(self, method, url, *a, **k)
+
+    monkeypatch.setattr(requests.Session, "request", guarded)
+
+
 # ------------------------------------------------------------------ config / db
 def _merge(base: dict, over: dict) -> dict:
     out = copy.deepcopy(base)

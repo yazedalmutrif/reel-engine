@@ -30,6 +30,7 @@ from jinja2 import Environment, FileSystemBytecodeCache, FileSystemLoader, selec
 from markupsafe import Markup
 
 from . import charts as C
+from ..log import get_logger
 
 HERE = Path(__file__).resolve().parent
 TEMPLATES = HERE / "templates"
@@ -1001,6 +1002,7 @@ def collect(cfg, conn: sqlite3.Connection, demo: bool, now: datetime) -> dict:
     return ctx
 
 
+log = get_logger("dashboard.build")
 CATEGORY_LABELS = {"national": "National", "religious": "Religious", "international": "International", "tech": "Tech", "career": "Career"}
 RULE_LABELS = {"gregorian": "Every year (Gregorian)", "hijri": "Every year (Hijri, Umm al-Qura)", "once": "One-off date"}
 
@@ -1072,13 +1074,40 @@ def collect_calendar(ctx: dict, cfg, conn: sqlite3.Connection, demo: bool, today
         "lo": lo, "hi": hi, "lead": lead, "categories": CATEGORY_LABELS, "rules": RULE_LABELS,
         "weekdays": ("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"),
     }
+    collect_coming_up(ctx, cfg, conn, demo, today)
+
+
+def collect_coming_up(ctx: dict, cfg, conn: sqlite3.Connection, demo: bool, today) -> None:
+    """v1.2 "Coming up": occasions inside the reminder window with the next reminder, ideas and checklist.
+    Read-only: cached ideas, or template ideas made on the fly; never a brain call during a build."""
+    from .. import occasions as oc
+
+    items = []
+    try:
+        rows = oc.upcoming_reminders(conn, cfg, today, include_demo=demo) if _table_exists(conn, "occasions") else []
+    except Exception as exc:  # noqa: BLE001 - the dashboard must build even if this part can't
+        log.warning("coming-up collector failed: %s", exc)
+        rows = []
+    for x in rows:
+        items.append({
+            "slug": x["slug"], "name_ar": x["name_ar"], "name_en": x["name_en"], "category": x["category"],
+            "cat_label": CATEGORY_LABELS.get(x["category"], x["category"]), "official": x["official"],
+            "start": x["start"], "end": x["end"], "days_until": x["days_until"], "approximate": x["approximate"],
+            "hijri": x["hijri"], "hijri_ar": x["hijri_ar"], "film_by": x["film_by"], "angle": x["angle"],
+            "checked_on": x["checked_on"], "source_text": _no_scheme(x["source_url"]),
+            "next_lead": x["next_lead"], "ideas_source": x["ideas_source"],
+            "ideas": [{"title": i.get("title", ""), "hook_line": i.get("hook_line", ""), "beats": list(i.get("beats") or []),
+                       "shot_note": i.get("shot_note", ""), "length_s": i.get("length_s")} for i in x["ideas"]],
+            "checklist": list(x["checklist"]),
+        })
+    ctx["coming_up"] = items
 
 
 def collect_accounts(ctx: dict, cfg, conn: sqlite3.Connection, demo: bool) -> None:
     from .. import accounts as ac
 
     if not _table_exists(conn, "accounts"):
-        ctx["accounts"] = {"rows": [], "analysis": None, "by_acc": {}, "stats": {}}
+        ctx["accounts"] = {"rows": [], "analysis": None, "by_acc": {}, "stats": {}, "recs": {}}
         return
     rows = ac.list_accounts(conn, include_demo=demo)
     if not demo:
@@ -1089,9 +1118,19 @@ def collect_accounts(ctx: dict, cfg, conn: sqlite3.Connection, demo: bool) -> No
     an = ac.latest_analysis(conn)
     by_acc = {a["account"]: a for a in (an or {}).get("accounts", [])} if an else {}
     stats = {s["account"]: s for s in ((an or {}).get("stats", {}) or {}).get("stats", [])} if an else {}
+    recs: dict = {}
     for r in rows:
         r["analysis"] = by_acc.get(r["pseudonym"])
         r["stats"] = stats.get(r["pseudonym"])
+        r["niche"] = r.get("niche") or ""
+        try:
+            rec = ac.latest_recommendation(conn, r["username"], cfg=cfg)
+        except Exception as exc:  # noqa: BLE001 - an old DB or a bad row must not break the build
+            log.warning("recommendation for the accounts page unavailable: %s", exc)
+            rec = None
+        if rec:
+            rec["created"] = _ts(rec["created"])
+            recs[r["username"]] = rec
     ctx["accounts"] = {
         "rows": rows, "analysis": an, "created": _ts(an["created_at"]) if an else None,
         "own_analysis": by_acc.get("OWN"),
@@ -1099,6 +1138,7 @@ def collect_accounts(ctx: dict, cfg, conn: sqlite3.Connection, demo: bool) -> No
         "metrics_retention_days": int(cfg.get("accounts.metrics_retention_days", 180)),
         "discovery": cfg.get("accounts.discovery", "off"),
         "csv_columns": ",".join(ac.CSV_COLUMNS),
+        "recs": recs,
     }
 
 

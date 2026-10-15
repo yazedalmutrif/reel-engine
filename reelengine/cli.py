@@ -488,11 +488,14 @@ def _occ_fields(a) -> dict:
 def cmd_calendar(cfg, a) -> int:
     from . import occasions as oc
 
-    conn = _conn(cfg)
+    # `seed` reports what IT added/refreshed, so skip the automatic seed that _conn() (open_db) runs first
+    conn = db.connect(cfg.db_path) if a.action == "seed" else _conn(cfg)
     try:
+        if a.action == "remind":
+            return _calendar_remind(cfg, conn, a)
         if a.action == "seed":
-            n = oc.ensure_seeded(conn, cfg)
-            print(f"added {n} seed occasions (existing edits and deletions are kept)")
+            r = oc.seed(conn, cfg)
+            print(f"added {r['added']} and refreshed {r['refreshed']} seed occasions (your edits and deletions are kept)")
             return 0
         if a.action == "list":
             rows = oc.all_occasions(conn, include_demo=False)
@@ -529,6 +532,25 @@ def cmd_calendar(cfg, a) -> int:
     return 2
 
 
+def _calendar_remind(cfg, conn, a) -> int:
+    """`reel calendar remind [--dry-run]`: the daily occasion reminders now (dry-run: show, send/mark nothing)."""
+    from . import occasions as oc
+    from .pipeline import Ctx
+
+    report: list = []
+    if a.dry_run:
+        oc.remind(conn, cfg, lambda *x, **k: None, dry_run=True, report=report)
+    else:
+        from .jobs import engine_lock
+
+        with engine_lock(cfg):
+            oc.remind(conn, cfg, Ctx.create(cfg, conn).notify, report=report)
+    head = "would send" if a.dry_run else "sent"
+    _out(report, a.json, "\n\n".join(f"[{head}] {r['title']}  (lead {r['lead']} d, ideas: {r['ideas_source']})\n{r['body']}" for r in report)
+         or "no occasion reminder due today")
+    return 0
+
+
 # ------------------------------------------------------------------ accounts
 def cmd_accounts(cfg, a) -> int:
     from . import accounts as ac
@@ -541,7 +563,7 @@ def cmd_accounts(cfg, a) -> int:
                                           for r in rows) or "no accounts attached (reel accounts attach <username> --role reference)")
             return 0
         if a.action == "attach":
-            r = ac.attach(conn, a.username or "", a.role, notes=a.notes or "")
+            r = ac.attach(conn, a.username or "", a.role, notes=a.notes or "", niche=a.niche)
             print(f"attached @{r['username']} as {r['role']} ({r['pseudonym']})")
             return 0
         if a.action == "forget":
@@ -566,6 +588,14 @@ def cmd_accounts(cfg, a) -> int:
                 out = ac.analyze(cfg, conn)
             _out(out, a.json, out["summary"] + "\n" + "\n".join(f"- {i['idea']} ({i['hook_type']})" for i in out["ideas"]))
             return 0
+        if a.action == "recommend":
+            if not a.username:
+                raise ac.AccountError("give the username: reel accounts recommend <username> [--niche \"...\"]")
+            r = ac.recommend(cfg, conn, a.username, a.niche, use_brain=not a.no_brain)
+            _out(r, a.json, (f"{r['note']}\n" if r["note"] else "") + f"{r['summary']} (source: {r['source']}, basis: {r['basis']})\n"
+                 + "\n".join(f"- {i['topic']}: {i['hook_line']} [{i['format']}, {i['length']}, post {i['best_time']}]" for i in r["ideas"])
+                 + "".join(f"\n* {o['start']} {o['name_en']} (in {o['days_until']} d): {o['angle']}" for o in r["occasions"]))
+            return 0
         if a.action == "prune":
             _out(ac.prune(conn, cfg), a.json)
             return 0
@@ -579,6 +609,162 @@ def cmd_accounts(cfg, a) -> int:
         print(f"accounts: {exc}", file=sys.stderr)
         return 2
     return 2
+
+
+# ------------------------------------------------------------------ schedule (macOS launchd / Windows tasks)
+INSTALL_PHRASE = "INSTALL"
+UNINSTALL_PHRASE = "UNINSTALL"
+
+
+def _confirm(phrase: str) -> bool:
+    """A person types the phrase in a terminal. No flag skips it (fact-check 2026-10-15): an agent or a
+    script can't create or remove scheduled jobs on its own."""
+    if not sys.stdin.isatty():
+        print(f"Refusing: no terminal to confirm. Re-run it yourself in a terminal and type {phrase}.")
+        return False
+    return input(f"Type {phrase} to continue: ").strip() == phrase
+
+
+def cmd_schedule(cfg, a) -> int:
+    from . import macsched
+
+    if a.action == "plist":
+        out = Path(a.out) if a.out else cfg.data_dir / "launchd"
+        paths = macsched.write_plists(cfg, out)
+        print(f"Wrote {len(paths)} launchd plists to {out} (nothing installed):")
+        for pth in paths:
+            print(f"  {pth}")
+        print("\nTo install them (only after Yazeed's OK), either run:\n  reel schedule install --mac\nor by hand:")
+        print(f"  mkdir -p {macsched.agents_dir()}")
+        for c in macsched.install_commands(paths):
+            print("  " + " ".join(f'"{x}"' if " " in x else x for x in c))
+        tzw = macsched.tz_warning(cfg)
+        if tzw:
+            print(f"\nWARNING: {tzw}")
+        return 0
+    if a.action == "status":
+        if sys.platform == "win32" and not a.mac:
+            from .winsched import tasks_status
+
+            _out(tasks_status(), a.json)
+            return 0
+        st = macsched.status()
+        tzw = macsched.tz_warning(cfg)
+        if a.json:
+            _out({"jobs": st, "tz_warning": tzw}, True)
+        else:
+            for label, s_ in st.items():
+                if s_.get("exists"):
+                    print(f"{label}: loaded; state={s_.get('state')}; last exit code={s_.get('last_exit_code')}; runs={s_.get('runs')}")
+                else:
+                    print(f"{label}: not loaded" + ("" if not s_.get("plist_installed") else " (plist present in ~/Library/LaunchAgents)"))
+            if tzw:
+                print(f"WARNING: {tzw}")
+        return 0
+    # install / uninstall
+    if not a.mac:
+        print("Pass --mac (Windows tasks are managed by scripts/register-tasks.ps1 / unregister-tasks.ps1).")
+        return 2
+    if sys.platform != "darwin":
+        print("Refusing: --mac works only on macOS.")
+        return 2
+    if a.action == "install":
+        print("This will:")
+        print(f"  1. write 3 plists to {cfg.data_dir / 'launchd'}")
+        print(f"  2. copy them to {macsched.agents_dir()}")
+        print(f"  3. run `launchctl bootstrap {macsched.domain()} <plist>` for each (booting out an old copy first)")
+        print("  Jobs: tick every 15 min (:00/:15/:30/:45), daily 03:30, weekly Saturday 20:00 (Mac's local clock).")
+        print(f"  Mode stays {cfg.mode}; publishing still needs every live gate.")
+        tzw = macsched.tz_warning(cfg)
+        if tzw:
+            print(f"WARNING: {tzw}")
+        if not _confirm(INSTALL_PHRASE):
+            print("Not installed.")
+            return 1
+        for line in macsched.install(cfg):
+            print(line)
+        print("Check with: reel schedule status --mac")
+        return 0
+    print(f"This will boot out the 3 Reel Engine launchd jobs and delete their plists from {macsched.agents_dir()}.")
+    if not _confirm(UNINSTALL_PHRASE):
+        print("Nothing changed.")
+        return 1
+    for line in macsched.uninstall():
+        print(line)
+    return 0
+
+
+# ------------------------------------------------------------------ notify (desktop / Telegram)
+TELEGRAM_TOKEN_RE = re.compile(r"^\d{5,12}:[A-Za-z0-9_-]{30,50}$")
+
+
+def cmd_notify(cfg, a) -> int:
+    from . import notify as nt
+
+    if a.action == "setup-telegram":
+        tok = sys.stdin.readline().strip() if a.stdin else getpass.getpass("Paste the Telegram bot token from @BotFather (hidden): ").strip()
+        try:
+            if not TELEGRAM_TOKEN_RE.match(tok):
+                print("That does not look like a bot token (expected <digits>:<30-50 letters/digits/_/->). Nothing stored.")
+                return 2
+            secrets.set_secret(secrets.TELEGRAM_TOKEN, tok)
+            print("Bot token stored in the OS credential store (Windows Credential Manager / macOS Keychain).")
+            if a.verify:
+                try:
+                    me = nt.telegram_api(cfg, "getMe", token=tok)
+                    print(f"getMe ok: bot @{me.get('result', {}).get('username')}")
+                except RuntimeError as exc:
+                    print(f"getMe failed: {exc}")
+                    return 1
+        finally:
+            tok = ""  # noqa: F841  # nosec B105 - drops the reference, not a password
+        print("\nNext:\n  1. In Telegram, open your bot and send it /start.")
+        print("  2. Run: reel notify telegram-chat-id   (prints the chat ids that wrote to the bot)")
+        print("  3. Add to config.toml:\n       [notify]\n       telegram = true\n       telegram_chat_ids = [\"<your chat id>\"]")
+        print("  4. Run: reel notify test --channel telegram")
+        return 0
+    if a.action == "telegram-chat-id":
+        tok = secrets.get_secret(secrets.TELEGRAM_TOKEN, required=False)
+        if not tok:
+            print("No bot token stored. Run: reel notify setup-telegram")
+            return 2
+        try:
+            data = nt.telegram_api(cfg, "getUpdates", token=tok)
+        except RuntimeError as exc:
+            print(f"getUpdates failed: {exc}")
+            return 1
+        finally:
+            tok = ""  # noqa: F841  # nosec B105 - drops the reference, not a password
+        seen: dict[str, str] = {}
+        for u in data.get("result", []):
+            chat = (u.get("message") or u.get("my_chat_member") or u.get("channel_post") or {}).get("chat") or {}
+            if "id" in chat:
+                seen.setdefault(str(chat["id"]), chat.get("first_name") or chat.get("title") or "")
+        if not seen:
+            print("No chats yet. Send /start to the bot in Telegram, then run this again.")
+            return 1
+        print("Chats that wrote to the bot (put yours in [notify] telegram_chat_ids):")
+        for cid, name in seen.items():
+            print(f"  {cid}  {name}")
+        return 0
+    # test
+    ch = a.channel
+    desktop = ch in ("desktop", "all") and bool(cfg["notify"]["toast"])
+    telegram = ch in ("telegram", "all")
+    if telegram:
+        state, detail = nt.telegram_state(cfg)
+        if state != "ready":
+            print(f"telegram: not enabled: {detail}")
+            telegram = False
+    conn = _conn(cfg)
+    res = nt.notify(cfg, conn, "info", "Test notification", "If you can read this, this channel works.",
+                    toast=desktop, telegram=telegram, kind="action")
+    print("sent via: " + ", ".join(res["channels"]))
+    wanted = {"dashboard"} | ({nt.desktop_channel() or "desktop"} if desktop else set()) | ({"telegram"} if telegram else set())
+    missed = sorted(wanted - set(res["channels"]))
+    if missed:
+        print("failed: " + ", ".join(missed) + " (see data/logs/engine.log)")
+    return 0 if not missed else 1
 
 
 # ------------------------------------------------------------------ parser
@@ -641,8 +827,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("action", choices=["set"])
     sp.add_argument("name", choices=list(secrets.KNOWN_NAMES))
     sp.add_argument("--stdin", action="store_true")
-    sp = add("calendar", cmd_calendar, "Saudi occasions calendar: list | upcoming | add | edit | delete | seed")
-    sp.add_argument("action", choices=["list", "upcoming", "add", "edit", "delete", "seed"])
+    sp = add("calendar", cmd_calendar, "Saudi occasions calendar: list | upcoming | add | edit | delete | seed | remind")
+    sp.add_argument("action", choices=["list", "upcoming", "add", "edit", "delete", "seed", "remind"])
+    sp.add_argument("--dry-run", dest="dry_run", action="store_true", help="remind: show what would be sent; send and mark nothing")
     sp.add_argument("--slug", help="the occasion id (edit/delete; optional for add)")
     sp.add_argument("--name-ar", dest="name_ar")
     sp.add_argument("--name-en", dest="name_en")
@@ -659,8 +846,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--checked-on", dest="checked_on", help="YYYY-MM-DD")
     sp.add_argument("--keywords", help="comma-separated extra words that tag a reel as about this day")
     sp.add_argument("--days", type=int, default=21, help="upcoming: how many days ahead (default 21)")
-    sp = add("accounts", cmd_accounts, "attached Instagram accounts: list | attach | forget | import | analyze | prune | fetch")
-    sp.add_argument("action", choices=["list", "attach", "forget", "import", "analyze", "prune", "fetch"])
+    sp = add("accounts", cmd_accounts, "attached Instagram accounts: list | attach | forget | import | analyze | prune | fetch | recommend")
+    sp.add_argument("action", choices=["list", "attach", "forget", "import", "analyze", "prune", "fetch", "recommend"])
+    sp.add_argument("--niche", help="attach/recommend: what the account is about, in your words (max 200 characters)")
+    sp.add_argument("--no-brain", dest="no_brain", action="store_true", help="recommend: deterministic template only (no brain call)")
     sp.add_argument("username", nargs="?", help="Instagram username (with or without @)")
     sp.add_argument("--role", choices=["own", "reference", "competitor"], default="reference")
     sp.add_argument("--notes")
@@ -670,6 +859,15 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--item", default="")
     sp.add_argument("--note", default="")
     sp.add_argument("--date")
+    sp = add("schedule", cmd_schedule, "launchd jobs on macOS: plist | install --mac | uninstall --mac | status [--mac]")
+    sp.add_argument("action", choices=["plist", "install", "uninstall", "status"])
+    sp.add_argument("--mac", action="store_true", help="act on macOS launchd (install/uninstall need it)")
+    sp.add_argument("--out", help="plist: output folder (default data/launchd)")
+    sp = add("notify", cmd_notify, "notifications: setup-telegram | telegram-chat-id | test", json_flag=False)
+    sp.add_argument("action", choices=["setup-telegram", "telegram-chat-id", "test"])
+    sp.add_argument("--stdin", action="store_true", help="setup-telegram: read the token from one stdin line")
+    sp.add_argument("--verify", action="store_true", help="setup-telegram: call getMe once (network)")
+    sp.add_argument("--channel", choices=["dashboard", "desktop", "telegram", "all"], default="all", help="test: which channel(s)")
     return p
 
 

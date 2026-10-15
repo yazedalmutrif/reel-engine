@@ -4,6 +4,10 @@ CUDA runtime libraries come from pip wheels (nvidia-cublas-cu12, nvidia-cudnn-cu
 their bin folders are added with os.add_dll_directory before ctranslate2 loads.
 If CUDA fails for any reason the model is reloaded on CPU (int8), which is slower
 but keeps the pipeline running. The model is cached per process.
+
+macOS: ctranslate2 (4.8.2) has no CUDA and no Metal/MPS backend, so on darwin a device of
+"cuda" or "auto" goes straight to CPU with `cpu_compute_type` (int8, Apple Accelerate),
+without trying CUDA and without a warning.
 """
 from __future__ import annotations
 
@@ -45,7 +49,12 @@ def add_cuda_dll_dirs() -> list[str]:
     return added
 
 
+MAC_NO_CUDA = "macOS: no CUDA; CPU int8"
+
+
 def cuda_available() -> tuple[bool, str]:
+    if sys.platform == "darwin":
+        return (False, MAC_NO_CUDA)
     try:
         add_cuda_dll_dirs()
         import ctranslate2
@@ -73,7 +82,9 @@ def get_model(cfg) -> tuple[Any, str]:
     with _lock:
         if _model is not None and _model_key and _model_key[0] == path:
             return _model, _model_key[1]
-        if w["device"] in ("cuda", "auto"):
+        if w["device"] in ("cuda", "auto") and sys.platform == "darwin":
+            log.info("macOS: whisper runs on CPU/%s (ctranslate2 has no CUDA or Metal backend)", w["cpu_compute_type"])
+        elif w["device"] in ("cuda", "auto"):
             add_cuda_dll_dirs()
             try:
                 _model = _load(path, "cuda", w["compute_type"])

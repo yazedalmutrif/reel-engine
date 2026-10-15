@@ -1,6 +1,18 @@
 {% extends "base.html" %}
 {% import "_macros.html" as m %}
 {% macro role_chip(role) %}<span class="chip chip-sm acct-role-{{ role }}"><span class="dot" aria-hidden="true"></span>{{ role|human }}</span>{% endmacro %}
+{% macro rec_idea(i, n) %}
+<li class="rec-idea">
+  <div class="rec-idea-top"><span class="rec-idea-n" aria-hidden="true">{{ '%02d'|format(n) }}</span><h4 class="rec-idea-title"{{ (i.topic or '')|langattrs }}>{{ i.topic }}</h4></div>
+  <div class="say"><p class="kpi-label">Hook</p><p class="say-line"{{ (i.hook_line or '')|langattrs }}>{{ i.hook_line }}</p></div>
+  <div class="rec-facts">
+    {% if i.format %}<span class="chip chip-sm"{{ i.format|langattrs }}>{{ i.format }}</span>{% endif %}
+    {% if i.length %}<span class="chip chip-sm mono"><span class="sr-only">Length </span>{{ i.length }}</span>{% endif %}
+    {% if i.best_time %}<span class="chip chip-sm mono"><span aria-hidden="true">◷</span><span class="sr-only">Best time, Riyadh: </span>{{ i.best_time }}</span>{% endif %}
+  </div>
+  {% if i.why %}<p class="rec-why"><span class="kpi-label">Why</span><span{{ i.why|langattrs }}>{{ i.why }}</span></p>{% endif %}
+</li>
+{% endmacro %}
 {% macro analysis_card(a, title_html_id, label, role, posts) %}
 <div class="acct-an-grid">
   <div class="acct-an-cell"><p class="kpi-label">Topics</p><div class="chips">{% for t in a.topics %}<span class="chip"{{ t|langattrs }}>{{ t }}</span>{% else %}<span class="muted">–</span>{% endfor %}</div></div>
@@ -40,6 +52,7 @@
     <h2 id="acct-h">Attached accounts <span class="count mono">{{ A.rows|length }}</span></h2>
     <p class="section-sub">Own = this engine posts here. Reference = an account to learn from. Competitor = an account to watch.</p>
   </div>
+  <p class="btn-row" data-write-only><button type="button" class="btn btn-primary" data-link-open aria-haspopup="dialog"><span class="btn-icon" aria-hidden="true">＋</span>Link account</button><span class="muted">Attach, import and get a plan of what to post, in one go.</span></p>
   {% if A.rows %}
   <ul class="acct-grid">
     {% for r in A.rows %}
@@ -75,6 +88,65 @@
   {% else %}
   <section class="card">{{ m.empty("No accounts attached", "Attach your own account and a reference or competitor account below (or list them in config.toml under [accounts]).", "@") }}</section>
   {% endif %}
+</section>
+
+{# What to post: one plan per linked account (v1.2). A.recs is missing on builds without the recommendations table. #}
+{% set recs = A.recs if A.recs is defined and A.recs else {} %}
+<section class="section" aria-labelledby="rec-h">
+  <div class="section-head">
+    <h2 id="rec-h">What to post</h2>
+    <p class="section-sub">Ideas for each linked account, written when you link it. Times are Riyadh time. The AI only saw the account's pseudonym.</p>
+  </div>
+  {% for r in A.rows if recs.get(r.username) %}
+  {% set rec = recs[r.username] %}
+  {% set ideas = rec.ideas or [] %}
+  <article class="card rec" id="rec-{{ r.username }}" aria-labelledby="rec-{{ r.username }}-h">
+    <div class="card-head">
+      <h3 class="rec-h" id="rec-{{ r.username }}-h" tabindex="-1"><span class="mono">@{{ r.username }}</span> {{ role_chip(r.role) }}</h3>
+      <p class="rec-meta">{% if rec.created %}<span>Written <time datetime="{{ clock.iso(rec.created) }}">{{ clock.dt(rec.created) }}</time></span>{% endif %}<span class="rec-src{{ ' rec-src-template' if rec.source == 'template' }}"><span class="sr-only">Source: </span>{{ 'AI' if rec.source == 'brain' else 'Template' }}</span></p>
+    </div>
+    {% if rec.niche %}<div><p class="kpi-label">Niche</p><p class="rec-niche"{{ rec.niche|langattrs }}>{{ rec.niche }}</p></div>{% endif %}
+    {% if rec.basis == 'description' %}
+    <div class="callout callout-row rec-basis" role="note">
+      <span class="sev-icon sev-info" aria-hidden="true">i</span>
+      <div>
+        <p class="callout-title">Based on your description; add reel numbers for sharper advice.</p>
+        <p>No reels from this account are stored yet, so these ideas come from what you wrote, not from what performs.</p>
+        <a class="btn btn-sm" href="#acct-import" data-write-only data-acct-import-for="{{ r.username }}">Import posts</a>
+        <p data-readonly-note>Add numbers with <code>reel accounts import {{ r.username }} --file posts.csv</code>.</p>
+      </div>
+    </div>
+    {% else %}
+    <p class="rec-meta">Based on {{ r.posts }} stored reel{{ 's' if r.posts != 1 }} and their numbers.</p>
+    {% endif %}
+    {% if rec.source == 'template' %}<p class="up-src">Template ideas: the brain was unavailable when this plan was written</p>{% endif %}
+    {% if rec.summary %}<p class="rec-why"{{ rec.summary|langattrs }}>{{ rec.summary }}</p>{% endif %}
+    <ol class="rec-ideas">{% for i in ideas[:3] %}{{ rec_idea(i, loop.index) }}{% endfor %}</ol>
+    {% if ideas|length > 3 %}
+    <details class="tview rec-more">
+      <summary>Show {{ ideas|length - 3 }} more idea{{ 's' if ideas|length - 3 != 1 }}<span class="sr-only"> for @{{ r.username }}</span></summary>
+      <ol class="rec-ideas" start="4">{% for i in ideas[3:] %}{{ rec_idea(i, loop.index + 3) }}{% endfor %}</ol>
+    </details>
+    {% endif %}
+    {% if rec.occasions %}
+    <div>
+      <h4 class="sub-h">Saudi days that fit</h4>
+      <ul class="rec-occ">
+        {% for o in rec.occasions %}
+        <li>
+          <span class="rec-occ-in{{ ' is-today' if o.days_until == 0 }}">{% if o.days_until == 0 %}Today{% else %}in {{ o.days_until }}<span class="sr-only"> day{{ 's' if o.days_until != 1 }}</span><span aria-hidden="true"> d</span>{% endif %}</span>
+          <span class="rec-occ-what">{% if o.days_until is not none and o.days_until <= 14 %}<a class="rec-occ-ar" href="{{ root }}calendar.html#up-{{ o.slug }}" lang="ar" dir="rtl">{{ o.name_ar }}</a>{% else %}<span class="rec-occ-ar" lang="ar" dir="rtl">{{ o.name_ar }}</span>{% endif %}<span class="muted">{{ o.name_en }}</span><time class="mono muted" datetime="{{ o.start }}">{{ o.start }}</time></span>
+          {% if o.angle %}<p class="rec-occ-angle"{{ o.angle|langattrs }}>{{ o.angle }}</p>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+    {% if rec.note %}<p class="rec-note"{{ rec.note|langattrs }}>{{ rec.note }}</p>{% endif %}
+  </article>
+  {% else %}
+  <section class="card">{{ m.empty("No plan yet", "Link an account to get 5 to 7 ideas of what to post, with hooks, lengths and the best times.", "✎") }}</section>
+  {% endfor %}
 </section>
 
 <div class="callout callout-row" data-readonly-note>

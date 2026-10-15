@@ -33,7 +33,7 @@ from typing import Any, Iterator
 
 from .log import redact
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 STATES = (
     "new",
@@ -376,6 +376,30 @@ CREATE TABLE IF NOT EXISTS uploads (
 """
 
 
+# v3 (2026-10-15): cached occasion ideas, per-account recommendations ("Link account"), accounts.niche
+DDL_V3 = """
+CREATE TABLE IF NOT EXISTS occasion_ideas (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  slug TEXT NOT NULL,
+  start TEXT NOT NULL,               -- the occurrence's first day (YYYY-MM-DD, Asia/Riyadh)
+  created_at TEXT NOT NULL,
+  source TEXT NOT NULL,              -- brain | template
+  json TEXT NOT NULL,                -- {"ideas": [...], "checklist": [...]}
+  UNIQUE(slug, start)
+);
+
+CREATE TABLE IF NOT EXISTS account_recommendations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  basis TEXT NOT NULL,               -- description | numbers
+  source TEXT NOT NULL,              -- brain | template
+  json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_account_recs ON account_recommendations(account_id, id);
+"""
+
+
 class TransitionError(Exception):
     pass
 
@@ -429,6 +453,17 @@ def migrate(conn: sqlite3.Connection) -> None:
             if "first_seen_at" not in cols:
                 conn.execute("ALTER TABLE account_media ADD COLUMN first_seen_at TEXT")
             conn.execute("UPDATE account_media SET first_seen_at=fetched_at WHERE first_seen_at IS NULL")
+    # v3: one IMMEDIATE transaction; every step is idempotent, so it also repairs a DB where an earlier
+    # attempt stopped half-way (tables present but no niche column, or the version not bumped).
+    if ver < 3 or "niche" not in [r[1] for r in conn.execute("PRAGMA table_info(accounts)")]:
+        with tx(conn):
+            for stmt in DDL_V3.split(";"):
+                if stmt.strip():
+                    conn.execute(stmt)
+            if "niche" not in [r[1] for r in conn.execute("PRAGMA table_info(accounts)")]:
+                conn.execute("ALTER TABLE accounts ADD COLUMN niche TEXT")
+            if conn.execute("PRAGMA user_version").fetchone()[0] < 3:
+                conn.execute("PRAGMA user_version=3")
 
 
 @contextmanager

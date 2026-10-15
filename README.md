@@ -16,7 +16,13 @@ Since 2026-10-14 (branch `feature/calendar-upload-accounts`, see `docs/DECISIONS
 - an **Upload clip** button in the dashboard that feeds the normal intake path (127.0.0.1 only, CSRF-protected, never publishes);
 - **account analysis**: attach your own and reference/competitor accounts, import their public numbers (Business Discovery isn't available on the Instagram-Login path, see `docs/API_NOTES.md`), and the brain's pseudonymised analysis feeds the brief. Privacy: `docs/PRIVACY.md`.
 
-**Status:** built and tested in **dry-run** only. Nothing has been posted; going live needs the owner's recorded OK (see *Safe by design*). Windows only.
+Since 2026-10-15 (v1.2, branch `feature/v1.2-days-reminders-mac`, see `docs/DECISIONS_PENDING.md` PD-9 onwards):
+- **every celebration day**: the seed calendar grew from 21 to 42 days (Saudi national and Saudi-specific days, religious days on Umm al-Qura, international and professional days marked in Saudi Arabia, and tech/career events for 2026-2027), each with a source, the date checked and official/unofficial; sensitive days were left out on a legal-compliance ruling;
+- **"day coming up" reminders** 14, 7 and 3 days before and on the day (`[calendar] remind_days`), once per lead, each with 2-3 ready-to-film ideas (hook line, 3 beats, shot note, length) and the occasion's legal checklist; ideas come from the brain (no tools, inside the daily cap, one call per run) or from Saudi-dialect templates when the brain is unavailable. They arrive on the dashboard ("Coming up" on Overview and Calendar), as a macOS notification or Windows toast, and on Telegram if it's set up (off by default);
+- **macOS support**: macOS notifications, the Keychain, a launchd scheduler (`reel schedule … --mac`, written but not loaded), CPU int8 transcription, a pinned and checksum-verified ffmpeg via `scripts/setup-mac.sh`, and `config.mac.example.toml`;
+- **"Link account"**: one button (header and Accounts tab) that attaches an @username, imports pasted reels or a CSV if given, and writes a **"What to post"** card: 5-7 ideas (topic, hook, format, length, best time, why) plus the upcoming Saudi days that fit its niche. Without reel numbers it says it's based on the description. Same rules as v1.1: official API only, pseudonymised before the brain, PDPL retention, copy guard. CLI: `reel accounts recommend <username>`.
+
+**Status:** built and tested in **dry-run** only. Nothing has been posted; going live needs the owner's recorded OK (see *Safe by design*). Runs on Windows (the main PC) and, since v1.2, on macOS (Apple Silicon).
 
 > **بالعربية:** «Reel Engine» نظام آلي لحساب ريلز واحد على إنستغرام (محتوى باللهجة السعودية عن أدوات الذكاء الاصطناعي والوظائف التقنية). يصوّر صاحب الحساب المقطع ويرميه في مجلد، والنظام يقص التكرار والتوقفات، ويضيف ترجمة عربية مضبوطة، ويفحص الجودة والحقائق والأنظمة، ويكتب الوصف، ويجدول وينشر عبر واجهة إنستغرام الرسمية، ثم يتعلم من الأرقام ويكتب خطة التصوير للأسبوع الجاي. **الحالة:** مختبر في وضع التجربة (dry-run) فقط، وما نشر شي.
 
@@ -32,7 +38,7 @@ The dashboard screenshots use seeded **demo data** (every page carries a DEMO ba
 - **Safe by design.** Official API only; tokens only in Windows Credential Manager; the LLM runs with no tools for writing tasks; the dashboard is localhost-only with a strict CSP; idempotent publishing (crash-tested at every step); a kill switch; dry-run by default. `reel mode live` refuses unless `docs/DECISIONS.md` holds a `LIVE-OK` line, a token is stored, `doctor --live` has no FAIL, and the owner types `GO LIVE`.
 
 ## Stack
-Python 3.10 · hijridate (Umm al-Qura) · faster-whisper large-v3 (CUDA, RTX 4070) · ffmpeg 9 (libass + HarfBuzz + FriBidi, portable) · headless Claude Code CLI as the "brain" (structured JSON output, schema-validated) · SQLite · Jinja2 static dashboard with inline-SVG charts · Instagram API with Instagram Login (v26.0, resumable upload) · Windows Task Scheduler.
+Python 3.10 · hijridate (Umm al-Qura) · faster-whisper large-v3 (CUDA, RTX 4070; CPU int8 on macOS, which ctranslate2 runs without Metal) · ffmpeg 9 (libass + HarfBuzz + FriBidi, portable; on macOS the pinned Martin Riedl arm64 build, FriBidi inside its libass) · headless Claude Code CLI as the "brain" (structured JSON output, schema-validated) · SQLite · Jinja2 static dashboard with inline-SVG charts · Instagram API with Instagram Login (v26.0, resumable upload) · Windows Task Scheduler or macOS launchd · notifications: dashboard, Windows toast / macOS Notification Center, optional Telegram Bot API.
 
 ## Run it
 ```powershell
@@ -42,6 +48,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1     # inst
 .venv\Scripts\reel.exe dashboard --open                                     # the dashboard (127.0.0.1)
 .venv\Scripts\reel.exe dashboard --demo --open                              # the dashboard with demo data
 ```
+On macOS (Apple Silicon, no Homebrew, no sudo):
+```bash
+scripts/setup-mac.sh --dry-run      # see what it would do
+scripts/setup-mac.sh                # venv packages (Windows/CUDA wheels left out), pinned ffmpeg into bin/ffmpeg-mac, config.toml from config.mac.example.toml, inbox ~/Movies/Reel Inbox, calendar seed, doctor
+.venv/bin/reel dashboard --open     # the live dashboard on 127.0.0.1:8765
+.venv/bin/reel schedule plist       # write the launchd jobs to data/launchd/ (loading them is a separate, explicit step)
+```
+The Whisper large-v3 model (3.09 GB) is not downloaded by `setup-mac.sh`; until it is, `reel doctor` reports `whisper_model` as FAIL and clips can't be processed on the Mac (the dashboard, calendar, reminders, accounts and upload all work).
+
 **Settings.** Without a `config.toml` the engine runs on `config.example.toml`: dry-run, the inbox in `data/inbox`, vault writes off, and the fictional example brand pack in `brand.example/`. To use it for real, copy `config.example.toml` to `config.toml` (git-ignored), set your inbox, vault and backup folders, and point `brand_dir` at your own brand pack.
 
 **Brand pack.** `brand_dir` holds `facts.yaml` (the only facts captions may state, plus the trap rules), `gates.yaml` (legal rules), `never_say.yaml`, `captions.yaml` (templates, CTA lines, hashtag pool), `hooks.yaml`, `episodes.yaml`, `voice.md`, `styles.yaml` and the starting `playbook_v1.json`. `brand.example/` shows every file for a fictional creator. The prompts in `prompts/` are written for the owner's account; adapt them too if you reuse the engine.
@@ -59,6 +74,9 @@ Results on 2026-10-03 (Windows 11, Python 3.10):
 
 Results on 2026-10-14 (macOS, Python 3.10, branch `feature/calendar-upload-accounts`, no ffmpeg/GPU, the CUDA and Windows-only wheels left out of the install): **552 passed, 4 skipped, 1 failed**, 2 deselected. The 4 skips need the portable ffmpeg; the 1 failure is `test_vault_refuses_unsafe_paths[..\\escape.md]`, which tests a Windows path separator and fails on macOS before and after this branch (baseline on the same Mac: 431 passed, 4 skipped, 1 failed). ✍️ Not yet re-run on the Windows PC.
 
+Results on 2026-10-15 (macOS 26.5, Apple Silicon, Python 3.10, branch `feature/v1.2-days-reminders-mac`, pinned ffmpeg 9.0.2 installed, the CUDA and Windows-only wheels left out): **754 passed, 1 failed**, 2 deselected. The failure is the same Windows-path test as before (`test_vault_refuses_unsafe_paths[..\\escape.md]`); the 4 tests that needed ffmpeg now run. Before this branch, on the same Mac and the same morning: 546 passed, 4 skipped, 7 failed (6 of them depended on the wall clock and are fixed). ✍️ Not yet re-run on the Windows PC.
+- Mac end-to-end (the synthetic clip voiced with macOS `say -v Majed` because edge-tts was refused with HTTP 403, Whisper **tiny** on CPU int8 as a smoke test, FakeBrain): intake → transcribe → plan → render → QA → scheduled → dry-run published, all assertions passed; 38.2 s → 22.3 s, 3 cuts, −14.0 LUFS, true peak −1.5 dB; transcription 2.2 s on CPU (tiny). Arabic captions shape and order correctly with the macOS ffmpeg. Not a quality measure: large-v3 wasn't used.
+
 ## Results (measured in this build)
 - The synthetic 39.0 s Saudi-voice test clip (false start, filler, bad retake, long pauses; iPhone-style HEVC HDR, rotated) became a 17.1 s reel with 3 cuts. The brain kept the right takes and fixed an ASR error («سوّ CV»; `docs/qa/e2e/brain-edit-plan-2026-09-29.json`). Critique scores in the passing real-brain run: hook 7, clarity 8, value 7, accuracy 9 (`docs/qa/e2e/real-brain-summary.json`).
 - Timing on the RTX 4070: transcription inference 3.2 s (the whole stage, with model load, 12 s), render stage 11 s. Output −14.2 LUFS, true peak −1.3 dB, 1080×1920 H.264 High, 30 fps, faststart, no edit list (`docs/qa/e2e/fake-brain-summary.json`, `docs/qa/e2e/real-brain-qa.json`).
@@ -68,7 +86,7 @@ Results on 2026-10-14 (macOS, Python 3.10, branch `feature/calendar-upload-accou
 ## Not in this repo (kept private on purpose)
 - The owner's brand pack (`brand/facts.yaml`, `voice.md`, `hooks.yaml`, `episodes.yaml`, `captions.yaml`, `never_say.yaml`, `playbook_seed.md`, `playbook_v1.json`): personal facts, content plans and strategy.
 - `config.toml` (local folders), the build spec, decision log, build report and fact-check report (they quote personal facts), and the gate tests built on those facts.
-- Runtime data (`data/`: the SQLite database, clips, renders, logs), the Whisper model (`models/`) and ffmpeg (`bin/`); `setup.ps1` downloads the last two.
+- Runtime data (`data/`: the SQLite database, clips, renders, logs), the Whisper model (`models/`) and ffmpeg (`bin/`); `setup.ps1` downloads the last two (on macOS `setup-mac.sh` downloads ffmpeg only).
 
 ## Layout
 `reelengine/` code · `prompts/` brain prompts + JSON schemas · `brand/` fonts (OFL) + generic legal gates and caption styles · `brand.example/` fictional brand pack · `scripts/` setup, secrets, tasks, QA tools · `tests/` unit + e2e + mock Graph API · `docs/` setup, runbook, security, API notes, QA evidence · `data/` runtime (git-ignored).

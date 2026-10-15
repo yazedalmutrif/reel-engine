@@ -26,6 +26,7 @@
     <div class="top-meta">
       <span class="badge badge-{{ mode.badge.sev }}" title="Engine mode"><span class="badge-icon" aria-hidden="true">{{ mode.badge.icon }}</span>{{ mode.badge.text }}</span>
       <a class="btn upl-top" href="{{ root }}pipeline.html#upload" data-write-only><span class="btn-icon" aria-hidden="true">⇡</span>Upload clip</a>
+      <button type="button" class="btn upl-top" data-write-only data-link-open aria-haspopup="dialog"><span class="btn-icon" aria-hidden="true">＋</span>Link account</button>
       <span class="updated"><span class="updated-label">Updated</span> <time datetime="{{ updated_iso }}">{{ updated }}</time> <span class="tz">{{ tz_name }}</span></span>
     </div>
   </div>
@@ -42,5 +43,80 @@
   <p>Reel Engine dashboard · <span data-readonly-note>read-only</span><span data-write-only>uploads and edits on (this computer only)</span> · served on this computer only{% if demo %} · <strong>demo data</strong>{% endif %}</p>
   <p>Mode <span class="mono">{{ mode.mode }}</span>{% if mode.paused %} · publishing paused{% endif %} · times in {{ tz_name }}</p>
 </footer>
+{# The one "Link account" dialog. data-write-only keeps it out of read-only and demo builds; app.js wires it only when writes are on. #}
+<dialog class="link-dlg" id="link-dlg" aria-labelledby="link-h" aria-describedby="link-priv" data-write-only data-link-dialog>
+  <form class="form link-form" data-link-form novalidate>
+    <div class="link-head">
+      <h2 id="link-h">Link an account</h2>
+      <button type="button" class="btn btn-ghost link-x" data-link-close aria-label="Close"><span aria-hidden="true">✕</span></button>
+    </div>
+    <div class="link-body">
+      <p class="callout link-priv" id="link-priv"><span class="sev-icon sev-info" aria-hidden="true">i</span><span>Public data only. The AI sees a pseudonym, never the username.</span></p>
+      <fieldset class="link-fields" data-link-fields>
+        <legend class="sr-only">Account details</legend>
+        <div class="field">
+          <label class="field-label" for="link-user">Username</label>
+          <span class="affix"><span class="affix-pre" aria-hidden="true">@</span><input class="input input-mono" id="link-user" name="username" dir="ltr" autocomplete="off" autocapitalize="none" spellcheck="false" required maxlength="31" aria-describedby="link-user-err link-user-hint"></span>
+          <p class="field-error" id="link-user-err"></p>
+          <p class="field-hint" id="link-user-hint">Public Business or Creator account. Letters, numbers, dots and underscores.</p>
+        </div>
+        <div class="field">
+          <label class="field-label" for="link-role">Role</label>
+          <span class="select">
+            <select class="input" id="link-role" name="role">
+              <option value="reference" selected>Reference · learn from it</option>
+              <option value="competitor">Competitor · watch it</option>
+              <option value="own">Own · my account</option>
+            </select>
+          </span>
+        </div>
+        <div class="field">
+          <label class="field-label" for="link-niche">What is the account about? <span class="field-opt">optional if you add reels</span></label>
+          <textarea class="input" id="link-niche" name="niche" dir="auto" rows="2" maxlength="200" aria-describedby="link-niche-err link-niche-hint"></textarea>
+          <p class="field-error" id="link-niche-err"></p>
+          <div class="link-hint-row"><p class="field-hint" id="link-niche-hint">One or two lines, Arabic or English, up to 200 characters.</p><p class="link-count" data-link-count aria-hidden="true">0 / 200</p></div>
+        </div>
+        <details class="link-more" data-link-more>
+          <summary>Add reel numbers <span class="field-opt">optional · sharper advice</span></summary>
+          <div class="link-more-body">
+            <div class="field">
+              <label class="field-label" for="link-text">Paste rows</label>
+              <textarea class="input input-mono" id="link-text" name="text" dir="ltr" rows="4" spellcheck="false" aria-describedby="link-text-err link-format"></textarea>
+              <p class="field-error" id="link-text-err"></p>
+            </div>
+            <p class="or-rule">or</p>
+            <div class="field">
+              <label class="field-label" for="link-file">CSV file</label>
+              <input class="file-input" id="link-file" name="file" type="file" accept=".csv,text/csv" aria-describedby="link-file-err link-format">
+              <p class="field-error" id="link-file-err"></p>
+            </div>
+            <pre class="acct-format" id="link-format">Same format as Manual import, one reel per line:
+link | posted (YYYY-MM-DD HH:MM) | likes | comments | views | length (s) | caption</pre>
+          </div>
+        </details>
+      </fieldset>
+      <div class="link-run" data-link-run hidden>
+        <p class="link-run-h" tabindex="-1" data-link-run-h>Linking <span class="mono" data-link-run-user></span></p>
+        <progress class="upl-bar" aria-label="Linking, in progress" data-link-bar></progress>
+        <ol class="link-steps">
+          <li class="link-step" data-link-step="attach" data-state="todo"><span>Attaching the account<span class="sr-only" data-link-step-sr>, waiting</span></span><span class="link-step-note" data-link-step-note></span></li>
+          <li class="link-step" data-link-step="import" data-state="todo"><span>Importing reels<span class="sr-only" data-link-step-sr>, waiting</span></span><span class="link-step-note" data-link-step-note></span></li>
+          <li class="link-step" data-link-step="recommend" data-state="todo"><span>Writing recommendations<span class="sr-only" data-link-step-sr>, waiting</span></span><span class="link-step-note" data-link-step-note></span></li>
+        </ol>
+        <p class="link-time"><span data-link-elapsed>0:00</span> · usually under 2 minutes</p>
+        <p class="link-run-note" data-link-slow hidden>Taking longer than usual. It keeps going; you can close this and check the Accounts tab later.</p>
+        <p class="link-run-note" data-link-keep>Closing this window doesn't stop the job: it keeps running on this computer, and the plan appears on the Accounts tab when it's ready.</p>
+      </div>
+      <p class="reason reason-critical link-err" role="alert" tabindex="-1" data-link-error hidden><span class="sev-icon sev-critical" aria-hidden="true">✕</span><span class="reason-text" data-link-error-text></span></p>
+    </div>
+    <div class="form-foot link-foot">
+      <p class="form-status" role="status" aria-live="polite" data-link-status></p>
+      <span class="btn-row btn-row-end">
+        <button type="button" class="btn btn-ghost" data-link-close data-link-cancel>Cancel</button>
+        <button type="submit" class="btn btn-primary" data-link-submit>Link and analyse</button>
+      </span>
+    </div>
+  </form>
+</dialog>
 </body>
 </html>
