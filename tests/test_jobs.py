@@ -3,12 +3,23 @@ integrity + OneDrive copy), and publish_due respecting the kill switch and the d
 from __future__ import annotations
 
 import sqlite3
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from reelengine import db, jobs, pipeline
 from reelengine.config import load_config
+
+# A fixed instant outside quiet hours (00:30-11:00 Riyadh): 2026-10-14 (Wed) 15:00 Asia/Riyadh.
+# The publish tests used the real clock, so they failed whenever they ran during quiet hours.
+FROZEN_NOW = datetime(2026, 10, 14, 12, 0, tzinfo=timezone.utc)
+
+
+@pytest.fixture()
+def frozen_clock(monkeypatch):
+    """Freeze db.utcnow (every engine timestamp and default `now` goes through it)."""
+    monkeypatch.setattr(db, "utcnow", lambda: FROZEN_NOW)
+    return FROZEN_NOW
 
 
 @pytest.fixture()
@@ -63,6 +74,7 @@ def _scheduled_reel(cfg, conn, sha="a" * 64, minutes_ago=5):
     return rid
 
 
+@pytest.mark.usefixtures("frozen_clock")
 def test_publish_due_respects_kill_switch(cfg):
     conn = db.connect(cfg.db_path)
     ctx = pipeline.Ctx.create(cfg, conn, toast=False)
@@ -78,6 +90,7 @@ def test_publish_due_respects_kill_switch(cfg):
     assert db.get_reel(conn, rid)["dry_run"] == 1
 
 
+@pytest.mark.usefixtures("frozen_clock")
 def test_daily_cap_reschedules_second_reel(cfg):
     conn = db.connect(cfg.db_path)
     ctx = pipeline.Ctx.create(cfg, conn, toast=False)
@@ -90,6 +103,7 @@ def test_daily_cap_reschedules_second_reel(cfg):
     assert row["state"] == "scheduled" and db.parse_ts(row["scheduled_at"]) > db.utcnow()
 
 
+@pytest.mark.usefixtures("frozen_clock")
 def test_late_or_quiet_reels_are_rescheduled_not_posted(cfg):  # fact-check #7
     conn = db.connect(cfg.db_path)
     ctx = pipeline.Ctx.create(cfg, conn, toast=False)
@@ -99,15 +113,14 @@ def test_late_or_quiet_reels_are_rescheduled_not_posted(cfg):  # fact-check #7
     row = db.get_reel(conn, rid)
     assert row["state"] == "scheduled" and db.parse_ts(row["scheduled_at"]) > db.utcnow()
     # quiet hours: a reel that is due right now is still not posted at 03:00 Riyadh
-    from datetime import datetime
-
     rid2 = _scheduled_reel(cfg, conn, "e" * 64, minutes_ago=1)
-    three_am = datetime.now(cfg.tz).replace(hour=3, minute=0, second=0, microsecond=0).astimezone(db.utcnow().tzinfo)
+    three_am = db.utcnow().astimezone(cfg.tz).replace(hour=3, minute=0, second=0, microsecond=0).astimezone(db.utcnow().tzinfo)
     conn.execute("UPDATE reels SET scheduled_at=? WHERE id=?", ((three_am - timedelta(minutes=1)).isoformat(timespec="seconds"), rid2))
     res = jobs.publish_due(ctx, now=three_am)
     assert "quiet hours" in res["outcomes"][rid2]
 
 
+@pytest.mark.usefixtures("frozen_clock")
 def test_requeue_only_for_dry_run_rehearsals(cfg, capsys):  # fact-check #1 (HIGH)
     from types import SimpleNamespace
 
@@ -135,3 +148,22 @@ def test_requeue_only_for_dry_run_rehearsals(cfg, capsys):  # fact-check #1 (HIG
     assert cli.cmd_requeue(cfg, SimpleNamespace(id=ok)) == 0
     row = db.get_reel(conn, ok)
     assert row["state"] == "scheduled" and row["dry_run"] == 0 and row["media_id"] is None
+
+
+def test_daily_sends_the_occasion_reminders_once(cfg):
+    """jobs.daily runs occasions.remind (v1.2 leads); a second daily the same day sends nothing again."""
+    from reelengine import brain, occasions
+
+    brain.set_provider(brain.FakeBrain({}))  # ideas: templates (no real CLI)
+    try:
+        conn = db.connect(cfg.db_path)
+        today = occasions.local_today(cfg)
+        occasions.add(conn, {"name_ar": "يوم اليوم", "name_en": "Jobs Test Day", "rule": "once", "year": today.year,
+                             "month": today.month, "day": today.day, "category": "tech"})
+        s = jobs.daily(cfg, toast=False)
+        assert "jobs-test-day" in s["occasion_reminders"]
+        assert jobs.daily(cfg, toast=False)["occasion_reminders"] == []
+        rows = conn.execute("SELECT title, body FROM notifications WHERE title LIKE 'Jobs Test Day%'").fetchall()
+        assert len(rows) == 1 and rows[0]["title"] == "Jobs Test Day is today" and "Checklist:" in rows[0]["body"]
+    finally:
+        brain.set_provider(None)
