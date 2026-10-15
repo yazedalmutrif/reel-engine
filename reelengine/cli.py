@@ -488,7 +488,8 @@ def _occ_fields(a) -> dict:
 def cmd_calendar(cfg, a) -> int:
     from . import occasions as oc
 
-    conn = _conn(cfg)
+    # `seed` reports what IT added/refreshed, so skip the automatic seed that _conn() (open_db) runs first
+    conn = db.connect(cfg.db_path) if a.action == "seed" else _conn(cfg)
     try:
         if a.action == "remind":
             return _calendar_remind(cfg, conn, a)
