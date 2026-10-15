@@ -1,4 +1,5 @@
-"""Secrets live only in Windows Credential Manager (keyring service "ReelEngine").
+"""Secrets live only in the OS credential store (Windows Credential Manager / macOS Keychain),
+via keyring, service "ReelEngine".
 
 Nothing in this module writes a secret to disk, a log, the DB or OneDrive. Every
 value read is registered with the log redactor. Token *metadata* (issued/expiry
@@ -19,6 +20,8 @@ APP_SECRET = "ig_app_secret"  # nosec B105 - keyring entry name
 TELEGRAM_TOKEN = "telegram_bot_token"  # nosec B105 - keyring entry name
 FB_DISCOVERY_TOKEN = "fb_discovery_token"  # nosec B105 - keyring entry name (only if accounts.discovery = "facebook_login")
 KNOWN_NAMES = (ACCESS_TOKEN, APP_SECRET, TELEGRAM_TOKEN, FB_DISCOVERY_TOKEN)
+SETUP_HINT = {TELEGRAM_TOKEN: "reel notify setup-telegram", APP_SECRET: "reel secret set ig_app_secret",
+              FB_DISCOVERY_TOKEN: "reel secret set fb_discovery_token"}
 
 log = get_logger("secrets")
 
@@ -37,7 +40,7 @@ def get_secret(name: str, required: bool = True) -> str | None:
         register_secret(value)
         return value
     if required:
-        raise SecretMissing(f"secret '{name}' is not in Windows Credential Manager (service {SERVICE}). Run `reel connect`.")
+        raise SecretMissing(f"secret '{name}' is not in the OS credential store (Windows Credential Manager / macOS Keychain, service {SERVICE}). Run `{SETUP_HINT.get(name, 'reel connect')}`.")
     return None
 
 

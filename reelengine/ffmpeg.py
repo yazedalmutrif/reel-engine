@@ -19,6 +19,11 @@ log = get_logger("ffmpeg")
 CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
 
+def setup_hint() -> str:
+    """The setup script for this OS (used in error messages and doctor hints)."""
+    return "scripts/setup-mac.sh" if sys.platform == "darwin" else "scripts/setup.ps1"
+
+
 class FFmpegError(RuntimeError):
     def __init__(self, msg: str, stderr: str = ""):
         super().__init__(msg)
@@ -35,7 +40,7 @@ def run(
     check: bool = True,
 ) -> subprocess.CompletedProcess:
     if not Path(binary).exists():
-        raise FFmpegError(f"binary not found: {binary} (run scripts/setup.ps1)")
+        raise FFmpegError(f"binary not found: {binary} (run {setup_hint()})")
     cmd = [str(binary), *map(str, args)]
     log.debug("run %s", " ".join(cmd)[:2000])
     try:

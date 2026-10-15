@@ -12,9 +12,11 @@ never uploaded or published and expires by itself after 24 h.
 """
 from __future__ import annotations
 
+import platform
 import shutil
 import subprocess  # nosec B404
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +24,7 @@ from . import db, secrets, tokens
 from .brain import resolve_cli
 from .config import live_ok_recorded, validate
 from .ffmpeg import run as run_bin
+from .ffmpeg import setup_hint
 from .graph import GraphClient, GraphError
 
 CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
@@ -31,14 +34,57 @@ def _add(out: list, name: str, status: str, detail: str = "") -> None:
     out.append({"check": name, "status": status, "detail": detail})
 
 
+REQUIRED_FFMPEG_FLAGS = ("--enable-libass", "--enable-libharfbuzz", "--enable-libx264", "--enable-libzimg")
+_PROBE_ASS = """[Script Info]
+ScriptType: v4.00+
+PlayResX: 320
+PlayResY: 240
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, Bold, Italic, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,24,&H00FFFFFF,0,0,2,10,10,10,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,\u0645\u0631\u062d\u0628\u0627
+"""
+
+
+def fribidi_probe(ffmpeg_bin: Path, timeout: float = 30) -> tuple[bool, str]:
+    """Render one frame through the `ass` filter at -v verbose and look for libass's
+    "Shaper: FriBidi ..." line (builds that link FriBidi inside libass have no
+    --enable-libfribidi flag). Temp dir, list args, timeout."""
+    with tempfile.TemporaryDirectory(prefix="reel-fribidi-") as td:
+        (Path(td) / "probe.ass").write_text(_PROBE_ASS, encoding="utf-8")
+        p = run_bin(ffmpeg_bin, ["-hide_banner", "-nostdin", "-v", "verbose", "-f", "lavfi", "-i", "color=c=black:s=320x240:d=0.2",
+                                 "-vf", "ass=probe.ass", "-frames:v", "1", "-f", "null", "-"], cwd=Path(td), timeout=timeout, check=False)
+    err = p.stderr.decode("utf-8", "replace") if isinstance(p.stderr, bytes) else str(p.stderr or "")
+    line = next((ln.strip() for ln in err.splitlines() if "Shaper:" in ln and "FriBidi" in ln), "")
+    return (bool(line), line[line.find("Shaper:"):][:120] if line else "no 'Shaper: FriBidi' line from libass")
+
+
+def ffmpeg_check(cfg) -> tuple[str, str]:
+    v = run_bin(cfg.ffmpeg, ["-hide_banner", "-version"], timeout=20).stdout.decode(errors="replace")
+    need = [f for f in REQUIRED_FFMPEG_FLAGS if f not in v]
+    if "--enable-libfribidi" in v:
+        fb_ok, fb = True, "FriBidi: --enable-libfribidi"
+    else:
+        try:
+            fb_ok, detail = fribidi_probe(cfg.ffmpeg)
+        except Exception as exc:  # noqa: BLE001
+            fb_ok, detail = False, f"probe failed: {str(exc)[:120]}"
+        fb = f"FriBidi via libass ({detail})" if fb_ok else f"FriBidi missing ({detail})"
+    detail = v.splitlines()[0][:80] + f"; {fb}" + (f"; missing {need}" if need else "")
+    return ("ok" if not need and fb_ok else "fail"), detail
+
+
 def offline_checks(cfg, conn) -> list[dict]:
     out: list[dict] = []
     errs = validate(cfg.data)
     _add(out, "config", "ok" if not errs else "fail", "; ".join(errs) or str(cfg.source))
+    _add(out, "os", "ok", f"{platform.platform()} ({platform.machine()})")
     try:
-        v = run_bin(cfg.ffmpeg, ["-hide_banner", "-version"], timeout=20).stdout.decode(errors="replace")
-        need = [f for f in ("--enable-libass", "--enable-libharfbuzz", "--enable-libfribidi", "--enable-libx264", "--enable-libzimg") if f not in v]
-        _add(out, "ffmpeg", "ok" if not need else "fail", v.splitlines()[0][:80] + (f"; missing {need}" if need else ""))
+        _add(out, "ffmpeg", *ffmpeg_check(cfg))
     except Exception as exc:  # noqa: BLE001
         _add(out, "ffmpeg", "fail", str(exc)[:200])
     _add(out, "ffprobe", "ok" if cfg.ffprobe.exists() else "fail", str(cfg.ffprobe))
@@ -46,8 +92,11 @@ def offline_checks(cfg, conn) -> list[dict]:
     _add(out, "fonts", "ok" if len(fonts) >= 4 else "fail", f"{len(fonts)} IBM Plex Sans Arabic files")
     from .transcribe import cuda_available
 
-    ok, detail = cuda_available()
-    _add(out, "cuda", "ok" if ok else "warn", detail + ("" if ok else " (CPU int8 fallback will be used)"))
+    if sys.platform == "darwin":
+        _add(out, "cuda", *_mac_cpu_check(cfg))
+    else:
+        ok, detail = cuda_available()
+        _add(out, "cuda", "ok" if ok else "warn", detail + ("" if ok else " (CPU int8 fallback will be used)"))
     mp = cfg.resolve(cfg["whisper"]["model_path"])
     _add(out, "whisper_model", "ok" if (mp / "model.bin").exists() else "fail", str(mp))
     cli = resolve_cli(cfg["brain"]["cli_path"])
@@ -58,7 +107,9 @@ def offline_checks(cfg, conn) -> list[dict]:
         except Exception as exc:  # noqa: BLE001
             _add(out, "claude_cli", "fail", str(exc)[:200])
     else:
-        _add(out, "claude_cli", "fail", "not found on PATH or in ~/.vscode/extensions")
+        where = ("PATH, ~/.local/bin, ~/.claude/local, /opt/homebrew/bin, /usr/local/bin or the Claude app"
+                 if sys.platform == "darwin" else "PATH or ~/.vscode/extensions")
+        _add(out, "claude_cli", "fail", f"not found on {where} (or set brain.cli_path)")
     _add(out, "keyring", "ok", secrets.backend_name())
     has_tok = secrets.has_secret(secrets.ACCESS_TOKEN)
     _add(out, "secret:ig_access_token", "ok" if has_tok else "warn", "present" if has_tok else "missing (run `reel connect` after account setup)")
@@ -67,23 +118,67 @@ def offline_checks(cfg, conn) -> list[dict]:
     tstat = st.get("status") or "missing"
     _add(out, "token_state", "ok" if tstat == "ok" and (left or 0) > 7 else ("fail" if tstat == "auth_needed" else "warn"),
          f"{tstat}; expires in {left} days" if left is not None else tstat)
-    _add(out, "inbox", "ok" if cfg.inbox.exists() else "warn", str(cfg.inbox) + ("" if cfg.inbox.exists() else " (missing: create it or run scripts/setup.ps1)"))
+    _add(out, "inbox", "ok" if cfg.inbox.exists() else "warn", str(cfg.inbox) + ("" if cfg.inbox.exists() else f" (missing: create it or run {setup_hint()})"))
     free = shutil.disk_usage(cfg.data_dir if cfg.data_dir.exists() else cfg.root).free / 1e9
     _add(out, "disk", "ok" if free >= cfg["backup"]["min_free_gb"] else "warn", f"{free:.0f} GB free")
     qc = conn.execute("PRAGMA quick_check").fetchone()[0]
     _add(out, "database", "ok" if qc == "ok" else "fail", f"{cfg.db_path} quick_check={qc}")
-    from .winsched import tasks_status
+    if sys.platform == "darwin":
+        from . import macsched
 
-    ts = tasks_status()
-    missing = [n for n, s in ts.items() if not s.get("exists")]
-    _add(out, "scheduled_tasks", "ok" if not missing else "warn",
-         "all registered" if not missing else f"not registered: {', '.join(missing)} (run scripts/register-tasks.ps1 after Yazeed's OK)")
+        ts = macsched.status()
+        missing = [n for n, s in ts.items() if not s.get("exists")]
+        tzw = macsched.tz_warning(cfg)
+        detail = ("all loaded in launchd" if not missing else
+                  f"not loaded: {', '.join(missing)} (reel schedule plist / install --mac after Yazeed's OK)")
+        _add(out, "scheduled_tasks", "ok" if not missing and not tzw else "warn", detail + (f"; {tzw}" if tzw else ""))
+    else:
+        from .winsched import tasks_status
+
+        ts = tasks_status()
+        missing = [n for n, s in ts.items() if not s.get("exists")]
+        _add(out, "scheduled_tasks", "ok" if not missing else "warn",
+             "all registered" if not missing else f"not registered: {', '.join(missing)} (run scripts/register-tasks.ps1 after Yazeed's OK)")
+    _add(out, "desktop_notifications", *_desktop_check(cfg))
+    _add(out, "telegram", *_telegram_check(cfg))
     lo = live_ok_recorded(cfg)
     _add(out, "mode", "ok", f"{cfg.mode}; paused={cfg.pause_file.exists()}; LIVE-OK {'recorded' if lo else 'not recorded'}")
     vp = Path(cfg["vault"]["path"])
     _add(out, "vault", "ok" if vp.exists() else "warn",
          f"{'writes to the vault' if cfg['vault']['enabled'] else 'preview only (data/vault_preview)'}; vault path {'found' if vp.exists() else 'missing'}")
     return out
+
+
+def _mac_cpu_check(cfg) -> tuple[str, str]:
+    ct = cfg["whisper"]["cpu_compute_type"]
+    try:
+        import ctranslate2
+
+        types = ctranslate2.get_supported_compute_types("cpu")
+    except Exception as exc:  # noqa: BLE001
+        return "warn", f"n/a on macOS; ctranslate2 check failed: {str(exc)[:120]}"
+    msg = "n/a on macOS: CPU int8 (ctranslate2 has no Metal backend)"
+    return ("ok", msg) if ct in types else ("warn", f"{msg}; cpu_compute_type {ct!r} not in {sorted(types)}")
+
+
+def _desktop_check(cfg) -> tuple[str, str]:
+    on = cfg["notify"]["toast"]
+    if sys.platform == "darwin":
+        from .notify import OSASCRIPT
+
+        if not on:
+            return "ok", "off ([notify] toast = false)"
+        return ("ok", f"macOS notifications via {OSASCRIPT}") if Path(OSASCRIPT).exists() else ("warn", f"{OSASCRIPT} not found")
+    if sys.platform == "win32":
+        return "ok", "Windows toast" + ("" if on else " (off: [notify] toast = false)")
+    return "ok", "no desktop channel on this OS (dashboard only)"
+
+
+def _telegram_check(cfg) -> tuple[str, str]:
+    from .notify import telegram_state
+
+    state, detail = telegram_state(cfg)
+    return ("ok" if state in ("off", "ready") else "warn"), detail
 
 
 def live_checks(cfg, conn, probe_container: bool = False, client: GraphClient | None = None) -> list[dict]:

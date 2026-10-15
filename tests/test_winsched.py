@@ -87,3 +87,15 @@ def test_task_names_match_the_scripts():
         text = (SCRIPTS / script).read_text(encoding="utf-8")
         for name in winsched.TASK_NAMES:
             assert f"'{name}'" in text, f"{script} is missing {name!r}"
+
+
+def test_mac_jobs_mirror_the_windows_tasks():
+    """macsched (launchd) runs the same three jobs at the same times as register-tasks.ps1."""
+    from reelengine import macsched
+
+    text = (SCRIPTS / "register-tasks.ps1").read_text(encoding="utf-8")
+    assert "-Daily -At '03:30'" in text and "-DaysOfWeek Saturday -At '20:00'" in text and "-Minutes 15" in text
+    assert macsched.JOBS == ("tick", "daily", "weekly") and len(winsched.TASK_NAMES) == 3
+    assert macsched.calendar("daily") == {"Hour": 3, "Minute": 30}
+    assert macsched.calendar("weekly") == {"Weekday": 6, "Hour": 20, "Minute": 0}
+    assert [d["Minute"] for d in macsched.calendar("tick")] == [0, 15, 30, 45]
