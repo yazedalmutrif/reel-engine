@@ -221,7 +221,15 @@ SCHEMA: dict = _obj(
             }
         ),
         "vault": _obj({"path": _STR, "subdir": {"const": "12 Social Media"}, "enabled": _BOOL}),  # pinned: the engine writes nowhere else
-        "notify": _obj({"toast": _BOOL, "telegram": _BOOL}),
+        "notify": _obj(
+            {
+                "toast": _BOOL,  # desktop notification on this OS (Windows toast / macOS notification); name kept for old configs
+                "telegram": _BOOL,  # master switch (PDPL ruling: kinds below only, allow-listed chats only)
+                "telegram_chat_ids": {"type": "array", "items": {"type": "string", "pattern": r"^-?\d{1,20}$"}, "maxItems": 5, "uniqueItems": True},
+                "telegram_kinds": {"type": "array", "items": {"enum": ["occasion", "action", "error", "published", "brief"]}, "uniqueItems": True},
+                "telegram_host": {"type": "string", "pattern": r"^(https://[A-Za-z0-9.-]+(:\d+)?|http://127\.0\.0\.1:\d+)/?$"},  # http only for a local mock
+            }
+        ),
         "backup": _obj({"keep": {"type": "integer", "minimum": 1}, "onedrive_copy_dir": _STR, "min_free_gb": _NUM}),
         "dashboard": _obj(
             {
@@ -239,6 +247,12 @@ SCHEMA: dict = _obj(
                 "film_lead_days": {"type": "integer", "minimum": 0, "maximum": 14},
                 "post_window_days": {"type": "integer", "minimum": 0, "maximum": 7},
                 "notify": _BOOL,
+                # v1.2 reminders: lead times in days before an occasion (0 = the day itself)
+                "remind_days": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 60},
+                                "minItems": 1, "maxItems": 6, "uniqueItems": True},
+                "remind_ideas": _BOOL,
+                "ideas_per_reminder": {"type": "integer", "minimum": 2, "maximum": 3},
+                "brain_reserve_calls": {"type": "integer", "minimum": 0, "maximum": 500},
             }
         ),
         "accounts": _obj(
@@ -274,11 +288,13 @@ SCHEMA: dict = _obj(
 DEFAULTS: dict = {
     "dashboard": {"allow_writes": True},
     "calendar": {"enabled": True, "lookahead_min_days": 3, "lookahead_max_days": 21, "film_lead_days": 3,
-                 "post_window_days": 2, "notify": True},
+                 "post_window_days": 2, "notify": True, "remind_days": [14, 7, 3, 0], "remind_ideas": True,
+                 "ideas_per_reminder": 3, "brain_reserve_calls": 10},
     "accounts": {"enabled": True, "own": "", "reference": [], "competitor": [], "retention_days": 90,
                  "metrics_retention_days": 180, "max_media_per_account": 30, "discovery": "off", "discovery_host": "https://graph.facebook.com",
                  "discovery_ig_user_id": ""},
     "upload": {"enabled": True, "max_mb": 2048, "min_free_gb": 5},
+    "notify": {"telegram_chat_ids": [], "telegram_kinds": ["occasion", "action", "error"], "telegram_host": "https://api.telegram.org"},
 }
 
 

@@ -130,6 +130,8 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         except ApiError as exc:
             self.close_connection = True  # an unread request body must not be parsed as a new request
             status, body = exc.status, {"error": str(exc)}
+            if getattr(exc, "field", None):  # which form field the message is about (the dialog highlights it)
+                body["field"] = exc.field
         except Exception as exc:  # noqa: BLE001
             self.close_connection = True
             from ..log import redact

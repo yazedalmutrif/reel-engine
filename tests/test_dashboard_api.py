@@ -292,3 +292,168 @@ def test_forget_with_a_busy_db_is_deferred_not_an_error(cfg, conn, tmp_path, mon
     status, res = api.accounts({"action": "forget", "username": "ref_two"})
     assert status == 200 and res["ok"] and res["vacuum"] == "deferred"
     assert conn.execute("SELECT COUNT(*) FROM accounts WHERE username='ref_two'").fetchone()[0] == 0
+
+
+# ------------------------------------------------------------------ v1.2 "Link account"
+import time as _time
+from datetime import datetime as _dt, timezone as _tz
+
+from reelengine import accounts as _ac, brain as _brain, occasions as _oc
+
+
+@pytest.fixture
+def fake_brain():
+    holder = {}
+
+    def install(handlers):
+        fb = _brain.FakeBrain(handlers)
+        _brain.set_provider(fb)
+        holder["fb"] = fb
+        return fb
+
+    install({})
+    yield install
+    _brain.set_provider(None)
+
+
+def _rec_answer(prompt, schema):
+    return {"ideas": [{"topic": f"T{k}", "hook_line": "ثلاث أدوات تختصر عليك وقت المذاكرة", "format": "talking head",
+                       "length": "30-45 s", "best_time": "21:30", "why": "playbook"} for k in range(5)],
+            "occasions": [], "summary": "ok"}
+
+
+def _wait_done(s, username, timeout=10.0):
+    end = _time.monotonic() + timeout
+    while _time.monotonic() < end:
+        r, j = jpost(s, "/api/accounts", {"action": "recommend_status", "username": username})
+        assert r.status == 200
+        if j["state"] in ("done", "error"):
+            return j
+        _time.sleep(0.05)
+    raise AssertionError("recommendation did not finish in time")
+
+
+def test_link_attaches_imports_and_recommends_in_the_background(srv, conn, fake_brain):
+    fb = fake_brain({"recommend": _rec_answer})
+    n0 = len(srv["rebuilt"])
+    r, j = jpost(srv, "/api/accounts", {"action": "link", "username": "@New_Acc", "niche": "AI tools for students",
+                                        "format": "paste", "text": "instagram.com/reel/LINK1234 | 2026-10-08 21:00 | 10 | 1 | 400\nnot a link"})
+    assert r.status == 200 and j["ok"] and j["username"] == "new_acc" and j["state"] == "running"
+    assert j["stored"] == 1 and len(j["errors"]) == 1  # the import error is reported, the link still goes ahead
+    done = _wait_done(srv, "new_acc")
+    assert done == {"state": "done", "source": "brain", "basis": "numbers"}
+    assert len(srv["rebuilt"]) > n0  # rebuilt BEFORE the state said done
+    acc = _ac.get(conn, "new_acc")
+    assert acc["role"] == "reference" and acc["niche"] == "AI tools for students"
+    assert _ac.latest_recommendation(conn, "new_acc")["source"] == "brain"
+    assert "new_acc" not in fb.calls[0][1]
+    assert conn.execute("SELECT COUNT(*) FROM notifications").fetchone()[0] == 0  # third-party data: never notified
+
+
+def test_link_template_path_and_status(srv, conn, fake_brain):
+    r, j = jpost(srv, "/api/accounts", {"action": "recommend_status", "username": "never_linked"})
+    assert r.status == 200 and j == {"state": "idle"}
+    r, j = jpost(srv, "/api/accounts", {"action": "link", "username": "desc_only", "niche": "careers for grads"})
+    assert r.status == 200 and j["stored"] == 0 and j["errors"] == []
+    done = _wait_done(srv, "desc_only")
+    assert done["state"] == "done" and done["source"] == "template" and done["basis"] == "description"  # FakeBrain has no handler
+
+
+@pytest.mark.parametrize("body, status, field", [
+    ({"action": "link", "username": "ok_name"}, 400, "niche"),
+    ({"action": "link", "username": "ok_name", "niche": "  ", "text": ""}, 400, "niche"),
+    ({"action": "link", "username": "bad name", "niche": "x"}, 400, "username"),
+    ({"action": "link", "niche": "x"}, 400, "username"),
+    ({"action": "link", "username": "ok_name", "niche": "x" * 201}, 400, "niche"),
+    ({"action": "link", "username": "ok_name", "niche": ["x"]}, 400, "niche"),
+    ({"action": "link", "username": "ok_name", "niche": "x", "role": "boss"}, 400, "role"),
+])
+def test_link_field_errors(srv, conn, body, status, field):
+    r, j = jpost(srv, "/api/accounts", body)
+    assert r.status == status and j["field"] == field and j["error"]
+    assert _ac.get(conn, "ok_name") is None
+
+
+def test_link_needs_csrf_like_every_post(srv, conn):
+    r, _ = jpost(srv, "/api/accounts", {"action": "link", "username": "sneaky", "niche": "x"}, csrf=False)
+    assert r.status == 403
+    r, _ = jpost(srv, "/api/accounts", {"action": "link", "username": "sneaky", "niche": "x"}, origin=False)
+    assert r.status == 403
+    assert _ac.get(conn, "sneaky") is None
+
+
+def test_one_job_at_a_time_and_double_link_is_safe(srv, conn, fake_brain):
+    gate = threading.Event()
+
+    def slow(prompt, schema):
+        assert gate.wait(10)
+        return _rec_answer(prompt, schema)
+
+    fake_brain({"recommend": slow})
+    r, j = jpost(srv, "/api/accounts", {"action": "link", "username": "first_acc", "niche": "AI"})
+    assert r.status == 200 and j["state"] == "running"
+    r, j = jpost(srv, "/api/accounts", {"action": "link", "username": "first_acc", "niche": "AI"})  # double click
+    assert r.status == 200 and j["state"] == "running"
+    r, j = jpost(srv, "/api/accounts", {"action": "link", "username": "second_acc", "niche": "AI"})
+    assert r.status == 409
+    assert _ac.get(conn, "second_acc") is None
+    gate.set()
+    assert _wait_done(srv, "first_acc")["state"] == "done"
+    r, j = jpost(srv, "/api/accounts", {"action": "link", "username": "second_acc", "niche": "AI"})
+    assert r.status == 200
+    assert _wait_done(srv, "second_acc")["state"] == "done"
+
+
+def test_link_in_demo_never_calls_the_brain(cfg, tmp_path, fake_brain):
+    fb = fake_brain({"recommend": _rec_answer})
+    demo_db = tmp_path / "demo.sqlite"
+    db.connect(demo_db).close()
+    api = WriteApi(cfg, demo_db, tmp_path / "site", demo=True)
+    status, res = api.accounts({"action": "link", "username": "demo_acc", "niche": "AI tools"})
+    assert status == 200
+    end = _time.monotonic() + 10
+    while api.recommend_status("demo_acc")["state"] == "running" and _time.monotonic() < end:
+        _time.sleep(0.05)
+    st = api.recommend_status("demo_acc")
+    assert st["state"] == "done" and st["source"] == "template" and fb.calls == []
+    c = db.connect(demo_db)
+    assert _ac.get(c, "demo_acc")["is_demo"] == 1
+    c.close()
+
+
+# ------------------------------------------------------------------ v1.2 dashboard collectors
+def test_collect_has_coming_up_and_recommendations(cfg, conn, fake_brain):
+    from reelengine.dashboard.build import collect
+
+    _oc.ensure_seeded(conn, cfg)
+    now = _dt(2027, 2, 1, 9, 0, tzinfo=_tz.utc)  # Ramadan 1448 starts 2027-02-08, Founding Day 22 Feb
+    _ac.attach(conn, "dash_acc", "own", niche="AI tools")
+    _ac.recommend(cfg, conn, "dash_acc", use_brain=False)
+    n_calls = conn.execute("SELECT COUNT(*) FROM brain_calls").fetchone()[0]
+    ctx = collect(cfg, conn, False, now)
+    assert conn.execute("SELECT COUNT(*) FROM brain_calls").fetchone()[0] == n_calls  # no brain call in a build
+    assert conn.execute("SELECT COUNT(*) FROM occasion_ideas").fetchone()[0] == 0     # templates on the fly, not cached
+    items = {x["slug"]: x for x in ctx["coming_up"]}
+    ram = items["ramadan-start"]
+    assert ram["days_until"] == 7 and ram["next_lead"] == 7 and ram["approximate"] and ram["hijri"]
+    assert ram["ideas_source"] == "template" and len(ram["ideas"]) == 3 and len(ram["ideas"][0]["beats"]) == 3
+    assert ram["checklist"] and ram["cat_label"] == "Religious" and ram["film_by"] and "source_text" in ram
+    assert not ram["source_text"].startswith("http")
+    for k in ("slug", "name_ar", "name_en", "category", "official", "start", "end", "angle", "checked_on", "hijri", "ideas", "checklist"):
+        assert k in ram
+    rec = ctx["accounts"]["recs"]["dash_acc"]
+    assert isinstance(rec["created"], _dt) and rec["source"] == "template" and rec["note"]
+    assert next(r for r in ctx["accounts"]["rows"] if r["username"] == "dash_acc")["niche"] == "AI tools"
+
+
+def test_old_db_without_v3_tables_still_builds(cfg, tmp_path):
+    from reelengine.dashboard.build import collect
+
+    p = tmp_path / "old.sqlite"
+    c = db.connect(p)
+    _oc.ensure_seeded(c, cfg)
+    c.executescript("DROP TABLE occasion_ideas; DROP TABLE account_recommendations;")
+    ctx = collect(cfg, c, False, _dt(2027, 2, 1, 9, 0, tzinfo=_tz.utc))
+    assert ctx["coming_up"] and ctx["accounts"]["recs"] == {}
+    build_dashboard(cfg, c, out_dir=tmp_path / "site_old")
+    c.close()

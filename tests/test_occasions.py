@@ -17,6 +17,14 @@ from reelengine.config import PACKAGE_ROOT
 SEED = PACKAGE_ROOT / "brand" / "occasions.yaml"
 
 
+@pytest.fixture(autouse=True)
+def _fake_brain_only():
+    """v1.2 reminders can ask the brain for ideas: never let a test reach the real `claude` CLI."""
+    brain.set_provider(brain.FakeBrain({}))  # any task -> BrainError -> template ideas
+    yield
+    brain.set_provider(None)
+
+
 @pytest.fixture
 def seeded(cfg, conn):
     assert oc.ensure_seeded(conn, cfg) > 0
@@ -161,7 +169,7 @@ def test_match_text_uses_names_and_keywords(seeded):
     assert "founding-day" in [o["slug"] for o in oc.match_text("What Founding Day teaches about careers", occs)]
     assert oc.match_text("3 أدوات ذكاء اصطناعي", occs) == []
     assert oc.match_text("take a leap of faith with your first job", occs) == []  # Latin keys match whole words only
-    assert "leap-2027" in [o["slug"] for o in oc.match_text("what I saw at LEAP 2027 in Riyadh", occs)]
+    assert "black-hat-mea-2026" in [o["slug"] for o in oc.match_text("what I saw at Black Hat in Riyadh", occs)]  # multi-word Latin key
 
 
 def _qa_passed_reel(conn, topic: str) -> int:
@@ -271,3 +279,50 @@ def test_cli_calendar_round_trip(cfg, capsys, monkeypatch):
     assert cli_main(["calendar", "delete", "--slug", "test-coders-day"]) == 0
     assert cli_main(["calendar", "upcoming", "--days", "400", "--json"]) == 0
     assert json.loads(capsys.readouterr().out.split("\n", 1)[1])  # first line is the delete message
+
+
+# ------------------------------------------------------------------ v1.2 re-seed refresh
+def _seed_file(tmp_path, angle_suffix: str = "", extra: list | None = None) -> "Path":
+    items = []
+    for slug, cat in (("alpha-day", "tech"), ("beta-day", "career"), ("gamma-day", "international")):
+        items.append({"slug": slug, "name_ar": "يوم", "name_en": slug.replace("-", " ").title(), "rule": "gregorian", "month": 5,
+                      "day": 1, "category": cat, "official": False, "angle": f"angle {slug}{angle_suffix}",
+                      "source_url": "https://example.com/s", "checked_on": "2026-10-14", "keywords": [slug]})
+    p = tmp_path / f"seed{angle_suffix or '0'}.yaml"
+    p.write_text(yaml.safe_dump({"occasions": items + (extra or [])}, allow_unicode=True), encoding="utf-8")
+    return p
+
+
+def test_reseed_refreshes_only_unedited_seed_rows(cfg, conn, tmp_path):
+    assert oc.seed(conn, cfg, _seed_file(tmp_path)) == {"added": 3, "refreshed": 0}
+    before = {r["slug"]: dict(r) for r in conn.execute("SELECT * FROM occasions")}
+    oc.edit(conn, "beta-day", {"notes": "my note"})        # edited by Yazeed
+    assert oc.delete(conn, "gamma-day")                    # tombstone
+    new = _seed_file(tmp_path, " v2", extra=[{"slug": "delta-day", "name_ar": "يوم", "name_en": "Delta Day", "rule": "gregorian",
+                                              "month": 6, "day": 2, "category": "tech", "official": False}])
+    assert oc.seed(conn, cfg, new) == {"added": 1, "refreshed": 1}
+    a = oc.get(conn, "alpha-day")
+    assert a["angle"] == "angle alpha-day v2"
+    assert (a["created_at"], a["updated_at"]) == (before["alpha-day"]["created_at"], before["alpha-day"]["updated_at"])  # still "unedited"
+    b = oc.get(conn, "beta-day")
+    assert b["angle"] == "angle beta-day" and b["notes"] == "my note"       # edited row untouched
+    assert oc.get(conn, "gamma-day") is None                                # tombstone stays deleted ...
+    g = conn.execute("SELECT angle, deleted FROM occasions WHERE slug='gamma-day'").fetchone()
+    assert g["deleted"] == 1 and g["angle"] == "angle gamma-day"            # ... and unchanged
+    assert oc.seed(conn, cfg, new) == {"added": 0, "refreshed": 0}         # nothing changed: no-op
+    assert oc.seed(conn, cfg, _seed_file(tmp_path)) == {"added": 0, "refreshed": 1}  # still refreshable (back to v1)
+    assert oc.get(conn, "alpha-day")["angle"] == "angle alpha-day"
+    assert oc.ensure_seeded(conn, cfg, new) == 0  # the old API still returns the number ADDED
+
+
+def test_an_edit_in_the_same_second_still_counts_as_edited(cfg, conn, tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+
+    fixed = datetime(2026, 10, 15, 9, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(db, "utcnow", lambda: fixed)
+    oc.seed(conn, cfg, _seed_file(tmp_path))
+    oc.edit(conn, "alpha-day", {"angle": "mine"})
+    r = oc.get(conn, "alpha-day")
+    assert r["updated_at"] != r["created_at"]
+    assert oc.seed(conn, cfg, _seed_file(tmp_path, " v2"))["refreshed"] == 2  # beta + gamma, not alpha
+    assert oc.get(conn, "alpha-day")["angle"] == "mine"

@@ -52,9 +52,15 @@ SOCKET_TIMEOUT_S = 60
 
 
 class ApiError(Exception):
-    def __init__(self, status: int, message: str):
+    def __init__(self, status: int, message: str, field: str | None = None):
         super().__init__(message)
         self.status = status
+        self.field = field  # optional: the form field the message is about (username / niche / text)
+
+
+def _field_of(message: str) -> str | None:
+    m = re.match(r"^(username|niche|text|role|notes)\b", message or "")
+    return m.group(1) if m else None
 
 
 def safe_filename(name: str, allowed_exts: tuple[str, ...]) -> str:
@@ -80,6 +86,10 @@ class WriteApi:
         self._rebuild = rebuild
         self._build_lock = threading.Lock()
         self._upload_lock = threading.Lock()
+        # "Link account" recommendation jobs: one at a time per process; state per username
+        self._rec_lock = threading.Lock()
+        self._rec_jobs: dict[str, dict] = {}
+        self._rec_running: str | None = None
         exts = tuple(e.lower() for e in cfg["intake"]["extensions"])
         self.exts = tuple(e for e in exts if e in (".mp4", ".mov", ".m4v"))
         self.upload_on = bool(cfg.get("upload.enabled", True)) and not demo
@@ -210,14 +220,105 @@ class WriteApi:
                 rows = acctmod.parse_csv(text) if d.get("format") == "csv" else acctmod.parse_paste(text)
                 out = acctmod.import_rows(conn, self.cfg, rows, default_username=str(d.get("username") or "") or None)
                 res = {"ok": not out["errors"], "stored": out["stored"], "errors": out["errors"][:20], "accounts": out["accounts"]}
+            elif action == "link":
+                conn.close()
+                return self.link(d)
+            elif action == "recommend_status":
+                conn.close()
+                return 200, self.recommend_status(str(d.get("username") or ""))
             else:
-                raise ApiError(400, "action must be attach, forget or import")
+                raise ApiError(400, "action must be attach, forget, import, link or recommend_status")
         except acctmod.AccountError as exc:
-            raise ApiError(400, str(exc)) from None
+            raise ApiError(400, str(exc), _field_of(str(exc))) from None
         finally:
             conn.close()
         self.rebuild()
         return 200, res
+
+    # ------------------------------------------------------------------ link account (v1.2)
+    def link(self, d: dict) -> tuple[int, dict]:
+        """Attach (with niche) -> import the pasted reels if any -> recommendation in a background thread.
+        Recommendation results are third-party data: they are stored and shown, never sent through notify."""
+        username = d.get("username")
+        if not isinstance(username, str) or not username.strip():
+            raise ApiError(400, "username: give the account's Instagram username", "username")
+        niche = d.get("niche")
+        if niche is not None and not isinstance(niche, str):
+            raise ApiError(400, "niche: plain text only", "niche")
+        text = d.get("text")
+        if text is not None and not isinstance(text, str):
+            raise ApiError(400, "text: plain text only", "text")
+        niche, text = (niche or "").strip(), (text or "").strip()
+        if not niche and not text:
+            raise ApiError(400, "Describe the account or add some reels", "niche")
+        try:
+            u = acctmod.norm_username(username)
+            if niche:
+                acctmod.clean_niche(niche)
+        except acctmod.AccountError as exc:
+            raise ApiError(400, str(exc), _field_of(str(exc))) from None
+        with self._rec_lock:
+            if self._rec_running is not None:
+                if self._rec_running == u:  # a double click: the job for this account is already running
+                    return 200, {"ok": True, "username": u, "stored": 0, "errors": [], "state": "running"}
+                raise ApiError(409, "a recommendation for another account is still running; try again in a moment")
+            self._rec_running = u
+            self._rec_jobs[u] = {"state": "running"}
+        started = False
+        try:
+            conn = self._conn()
+            try:
+                acctmod.attach(conn, u, str(d.get("role") or "reference"), notes=str(d.get("notes") or ""),
+                               is_demo=self.demo, niche=niche or None)
+                stored, errors = 0, []
+                if text:
+                    try:
+                        rows = acctmod.parse_csv(text) if d.get("format") == "csv" else acctmod.parse_paste(text)
+                        out = acctmod.import_rows(conn, self.cfg, rows, default_username=u)
+                        stored, errors = out["stored"], out["errors"][:20]
+                    except acctmod.AccountError as exc:  # import problems are reported, the link still goes ahead
+                        errors = [str(exc)]
+            finally:
+                conn.close()
+            t = threading.Thread(target=self._recommend_job, args=(u,), name=f"recommend-{u}", daemon=True)
+            t.start()
+            started = True
+        except acctmod.AccountError as exc:
+            raise ApiError(400, str(exc), _field_of(str(exc))) from None
+        finally:
+            if not started:
+                with self._rec_lock:
+                    self._rec_running = None
+                    self._rec_jobs.pop(u, None)
+        return 200, {"ok": True, "username": u, "stored": stored, "errors": errors, "state": "running"}
+
+    def _recommend_job(self, u: str) -> None:
+        state: dict = {"state": "error", "error": "stopped"}
+        try:
+            conn = self._conn()  # its own connection: sqlite connections aren't shared across threads here
+            try:
+                r = acctmod.recommend(self.cfg, conn, u, use_brain=not self.demo)
+            finally:
+                conn.close()
+            state = {"state": "done", "source": r["source"], "basis": r["basis"]}
+        except acctmod.AccountError as exc:
+            state = {"state": "error", "error": str(exc)[:300]}
+        except Exception as exc:  # noqa: BLE001 - reported to the page, never raised in a server thread
+            log.warning("recommendation for an account failed: %s", redact(str(exc))[:200])
+            state = {"state": "error", "error": "the recommendation failed; see the engine log"}
+        finally:
+            self.rebuild()  # the page shows the account (and the result) BEFORE the state says done
+            with self._rec_lock:
+                self._rec_jobs[u] = state
+                self._rec_running = None
+
+    def recommend_status(self, username: str) -> dict:
+        try:
+            u = acctmod.norm_username(username)
+        except acctmod.AccountError as exc:
+            raise ApiError(400, str(exc), "username") from None
+        with self._rec_lock:
+            return dict(self._rec_jobs.get(u) or {"state": "idle"})
 
     # ------------------------------------------------------------------ upload
     def upload(self, h) -> tuple[int, dict]:

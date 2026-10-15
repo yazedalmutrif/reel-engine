@@ -161,8 +161,16 @@ subdir = "12 Social Media"
 enabled = false               # false = write to data/vault_preview/ (needs Yazeed's OK to write the real vault)
 
 [notify]
-toast = true
-telegram = false              # v2, needs a bot + chat_id allow-list
+toast = true                  # desktop notification on this OS: Windows toast / macOS Notification Center (Linux: none).
+                              # The key keeps its old name so existing config.toml files still load.
+telegram = false              # master switch. Needs a bot token in the OS credential store (`reel notify setup-telegram`)
+                              # and at least one chat id below. Off = nothing is ever sent to Telegram.
+telegram_chat_ids = []        # allow-list (max 5), e.g. ["123456789"]; find yours with `reel notify telegram-chat-id`
+telegram_kinds = ["occasion", "action", "error"]   # PDPL ruling: only these kinds are sent (allowed: occasion, action,
+                              # error, published, brief). "occasion" sends title + body; every other kind sends the title
+                              # only + "Details on the dashboard.". Messages with an @handle, a URL, a home-folder path
+                              # or a secret are refused, never rewritten.
+telegram_host = "https://api.telegram.org"         # http://127.0.0.1:<port> only for a local mock
 
 [backup]
 keep = 7
@@ -180,7 +188,13 @@ lookahead_min_days = 3        # the weekly brief and the daily reminder look thi
 lookahead_max_days = 21       # ... up to this (1-3 weeks)
 film_lead_days = 3            # "film by" = occasion date minus this
 post_window_days = 2          # a reel about an occasion is scheduled in [date - this, last day of the occasion]
-notify = true                 # one reminder per occasion when it enters the look-ahead window
+notify = true                 # occasion reminders on/off (see remind_days)
+remind_days = [14, 7, 3, 0]   # remind this many days before each occasion (0 = on the day); 0-60, unique, max 6.
+                              # A missed one (PC asleep) is skipped, never sent late.
+remind_ideas = true           # put 2-3 filming ideas in each reminder (one brain call per day for all occasions;
+                              # deterministic templates when the brain is off, unavailable or near its cap)
+ideas_per_reminder = 3        # 2-3
+brain_reserve_calls = 10      # skip the brain for ideas when fewer calls than this are left in the 24 h cap
 
 [accounts]                    # account analysis: PUBLIC data only, official API only, no scraping
 enabled = true
