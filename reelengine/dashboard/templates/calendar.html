@@ -1,47 +1,22 @@
 {% extends "base.html" %}
 {% import "_macros.html" as m %}
-{% macro cat_chip(cat, label) %}<span class="chip chip-sm cal-cat-{{ cat }}"><span class="dot" aria-hidden="true"></span>{{ label }}</span>{% endmacro %}
-{% macro flag(official) %}{% if official %}<span class="cal-flag cal-flag-official">Official</span>{% else %}<span class="cal-flag cal-flag-intl">Not official</span>{% endif %}{% endmacro %}
 {% block main %}
 {% set cal = calendar %}
+{% set cat_chip = m.cat_chip %}
+{% set flag = m.flag %}
+{# coming_up comes from the v1.2 collector; an older build falls back to the look-ahead strip's items (no ideas) #}
+{% set up = coming_up if coming_up is defined and coming_up is not none else (cal.soon|selectattr('days_until', 'le', 14)|list) %}
 <div class="page-head">
   <h1>Calendar</h1>
   <p class="lede">Saudi and international occasions worth a reel. The weekly brief looks {{ cal.lo }} to {{ cal.hi }} days ahead and plans around them; a reel about an occasion is posted just before or on its day.</p>
 </div>
 
-<section class="section" aria-labelledby="cal-up-h">
+<section class="section up" id="coming-up" aria-labelledby="cal-up-h">
   <div class="section-head">
-    <h2 id="cal-up-h">Coming up in the next 3 weeks</h2>
-    <p class="section-sub">Film-by = {{ cal.lead }} days before. Hijri dates follow Umm al-Qura and can move a day after moon sighting.</p>
+    <h2 id="cal-up-h">Coming up · next 14 days</h2>
+    <p class="section-sub">Ready-to-film ideas for each occasion, plus what to check before you post. Hijri dates follow Umm al-Qura and can move a day after moon sighting (≈).</p>
   </div>
-  {% if cal.soon %}
-  <ul class="cal-strip">
-    {% for x in cal.soon %}
-    <li>
-      <article class="card cal-up" aria-labelledby="up-{{ x.slug }}">
-        <div class="cal-up-top">
-          <p class="cal-in{% if x.days_until == 0 %} cal-in-today{% endif %}">{% if x.days_until == 0 %}Today{% else %}{{ x.days_until }}<span class="unit"> day{{ 's' if x.days_until != 1 }}</span>{% endif %}</p>
-          <div class="chips">{{ cat_chip(x.category, x.cat_label) }} {{ flag(x.official) }}</div>
-        </div>
-        <p class="cal-date"><time datetime="{{ x.start }}">{{ x.start }}</time>{% if x.hijri %} · <span class="cal-hijri">{{ x.hijri }}</span>{% endif %}{% if x.end != x.start %} · to <time datetime="{{ x.end }}">{{ x.end }}</time>{% endif %}</p>
-        <h3 id="up-{{ x.slug }}" class="cal-name-ar" lang="ar" dir="rtl">{{ x.name_ar }}</h3>
-        <p class="cal-name-en">{{ x.name_en }}</p>
-        {% if x.approximate %}<p class="cal-approx"><span aria-hidden="true">≈</span> Approximate ±1 day (moon sighting)</p>{% endif %}
-        {% if x.angle %}
-        <div>
-          <p class="kpi-label">Content angle</p>
-          <p class="cal-angle"{{ x.angle|langattrs }}>{{ x.angle }}</p>
-        </div>
-        {% endif %}
-        <p class="cal-filmby"><span class="kpi-label">Film by</span> <time class="mono" datetime="{{ x.film_by }}">{{ x.film_by }}</time></p>
-        {% if x.source_text %}<p class="copy-line"><span class="kpi-label">Source</span> <code class="copy-text" id="src-{{ x.slug }}">{{ x.source_text }}</code>{% if x.checked_on %} <span>checked <time class="mono" datetime="{{ x.checked_on }}">{{ x.checked_on }}</time></span>{% endif %} <button type="button" class="btn btn-ghost btn-sm" data-copy="src-{{ x.slug }}" data-write-only aria-label="Copy the source address for {{ x.name_en }}">Copy</button></p>{% endif %}
-      </article>
-    </li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <section class="card">{{ m.empty("Nothing in the next 3 weeks", "No occasion starts in the look-ahead window. Add one below, or plan normal content.", "◷") }}</section>
-  {% endif %}
+  {{ m.coming_up(up, root) }}
 </section>
 
 <section class="section" aria-labelledby="cal-mo-h">

@@ -89,6 +89,17 @@
   </div>
 </section>
 
+{# coming_up comes from the v1.2 collector; an older build falls back to the calendar's look-ahead (no ideas) #}
+{% set up = coming_up if coming_up is defined and coming_up is not none else ((calendar.soon if calendar is defined and calendar.soon is defined else [])|selectattr('days_until', 'le', 14)|list) %}
+<section class="card up" aria-labelledby="up-ov-h">
+  <div class="card-head">
+    <h2 id="up-ov-h">Coming up{% if up %} <span class="count mono">{{ up|length }}</span>{% endif %}</h2>
+    <p class="card-sub">Occasions in the next 14 days, with ideas ready to film</p>
+  </div>
+  {{ m.coming_up(up, root, compact=True) }}
+  <p class="up-more"><a href="{{ root }}calendar.html#coming-up">{% if up|length > 3 %}{{ up|length - 3 }} more on the Calendar →{% else %}Open the Calendar →{% endif %}</a></p>
+</section>
+
 <div class="grid grid-2">
   <section class="card" aria-labelledby="fol-h">
     <div class="card-head">

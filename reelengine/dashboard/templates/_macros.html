@@ -55,3 +55,90 @@
 
 {% macro legend_line(label, cls) %}<span class="key"><span class="key-line {{ cls }}" aria-hidden="true"></span>{{ label }}</span>{% endmacro %}
 {% macro legend_dot(label, cls) %}<span class="key"><span class="key-dot {{ cls }}" aria-hidden="true"></span>{{ label }}</span>{% endmacro %}
+
+{# ---------------------------------------------------------------- occasions (shared by Overview and Calendar) #}
+{% macro cat_chip(cat, label) %}<span class="chip chip-sm cal-cat-{{ cat }}"><span class="dot" aria-hidden="true"></span>{{ label }}</span>{% endmacro %}
+{% macro flag(official) %}{% if official %}<span class="cal-flag cal-flag-official">Official</span>{% else %}<span class="cal-flag cal-flag-intl">Not official</span>{% endif %}{% endmacro %}
+
+{% macro up_in(x) %}<p class="cal-in{{ ' cal-in-today' if x.days_until == 0 }}">{% if x.days_until == 0 %}Today{% else %}<span class="up-in-label">In</span>{{ x.days_until }}<span class="unit"> day{{ 's' if x.days_until != 1 }}</span>{% endif %}</p>{% endmacro %}
+
+{% macro up_date(x) %}<p class="cal-date"><time datetime="{{ x.start }}">{{ x.start }}</time>{% if x.end and x.end != x.start %} to <time datetime="{{ x.end }}">{{ x.end }}</time>{% endif %}{% if x.hijri %} · <span class="cal-hijri">{{ x.hijri }}{% if x.approximate %} <span class="up-approx" aria-hidden="true">≈</span><span class="sr-only">, approximate, plus or minus one day</span>{% endif %}</span>{% elif x.approximate %} <span class="up-approx" aria-hidden="true">≈</span><span class="sr-only">approximate, plus or minus one day</span>{% endif %}</p>{% endmacro %}
+
+{# next_lead may be missing (older collector) or None (every reminder already sent): film-by still shows #}
+{% macro up_lead(x) %}{% if x.next_lead is defined and x.next_lead is not none %}<p class="up-lead">Next reminder {% if x.next_lead == 0 %}on the day{% else %}{{ x.next_lead }} day{{ 's' if x.next_lead != 1 }} before{% endif %}{% if x.film_by %} · film by <time class="mono" datetime="{{ x.film_by }}">{{ x.film_by }}</time>{% endif %}</p>{% elif x.film_by %}<p class="up-lead">Film by <time class="mono" datetime="{{ x.film_by }}">{{ x.film_by }}</time></p>{% endif %}{% endmacro %}
+
+{# items = coming_up; compact=True on the Overview (max `limit` occasions, hook lines only) #}
+{% macro coming_up(items, root, compact=False, limit=3) %}
+{% if items %}
+<ul class="up-list{{ ' up-list-compact' if compact }}">
+  {% for x in (items[:limit] if compact else items) %}
+  {% set ideas = x.ideas or [] %}
+  {% if compact %}
+  <li class="up-item" id="ov-up-{{ x.slug }}">
+    <div class="up-head">
+      {{ up_in(x) }}
+      <div class="up-names"><h3 class="cal-name-ar" lang="ar" dir="rtl">{{ x.name_ar }}</h3><p class="cal-name-en">{{ x.name_en }}</p></div>
+    </div>
+    <div class="up-meta">{{ up_date(x) }} {{ cat_chip(x.category, x.cat_label) }} {{ flag(x.official) }}</div>
+    {% if x.ideas_source == 'template' %}<p class="up-src">Template ideas: the brain was unavailable</p>{% endif %}
+    {% if ideas %}
+    <details class="tview up-ideas">
+      <summary>{{ ideas|length }} hook{{ 's' if ideas|length != 1 }} to film<span class="sr-only"> for {{ x.name_en }}</span></summary>
+      <ul class="up-hooks">
+        {% for i in ideas %}<li>{% if i.length_s %}<span class="kpi-label">~{{ i.length_s }} s</span>{% endif %}<p class="say-line"{{ i.hook_line|langattrs }}>{{ i.hook_line }}</p></li>{% endfor %}
+      </ul>
+      <p class="up-more"><a href="{{ root }}calendar.html#up-{{ x.slug }}">Beats, shots and checklist on the Calendar →</a></p>
+    </details>
+    {% else %}
+    <p class="up-lead">Ideas are written at the next daily check.</p>
+    {% endif %}
+  </li>
+  {% else %}
+  <li>
+    <article class="card up-item" id="up-{{ x.slug }}" aria-labelledby="up-{{ x.slug }}-h">
+      <div class="up-head">
+        {{ up_in(x) }}
+        <div class="up-names"><h3 id="up-{{ x.slug }}-h" class="cal-name-ar" lang="ar" dir="rtl">{{ x.name_ar }}</h3><p class="cal-name-en">{{ x.name_en }}</p></div>
+      </div>
+      <div class="up-meta">{{ up_date(x) }} {{ cat_chip(x.category, x.cat_label) }} {{ flag(x.official) }}</div>
+      {% if x.approximate %}<p class="cal-approx"><span aria-hidden="true">≈</span> Approximate ±1 day (moon sighting)</p>{% endif %}
+      {{ up_lead(x) }}
+      {% if x.angle %}<div><p class="kpi-label">Content angle</p><p class="cal-angle"{{ x.angle|langattrs }}>{{ x.angle }}</p></div>{% endif %}
+      {% if x.ideas_source == 'template' %}<p class="up-src">Template ideas: the brain was unavailable</p>{% endif %}
+      {% if ideas %}
+      <details class="tview up-ideas"{% if loop.first %} open{% endif %}>
+        <summary>{{ ideas|length }} ready-to-film idea{{ 's' if ideas|length != 1 }}<span class="sr-only"> for {{ x.name_en }}</span></summary>
+        <ol class="up-idea-grid">
+          {% for i in ideas %}
+          <li class="up-idea">
+            <div class="up-idea-top"><span class="up-idea-n" aria-hidden="true">{{ '%02d'|format(loop.index) }}</span><h4 class="up-idea-title"{{ (i.title or '')|langattrs }}>{{ i.title }}</h4>{% if i.length_s %}<span class="chip chip-sm mono">~{{ i.length_s }} s</span>{% endif %}</div>
+            <div class="say"><p class="kpi-label">Hook · say it word for word</p><p class="say-line"{{ (i.hook_line or '')|langattrs }}>{{ i.hook_line }}</p></div>
+            {% if i.beats %}<div><p class="kpi-label">Beats</p><ol class="beats"{{ i.beats|join(' ')|langattrs }}>{% for b in i.beats %}<li>{{ b }}</li>{% endfor %}</ol></div>{% endif %}
+            {% if i.shot_note %}<p class="shot"><span class="shot-icon" aria-hidden="true">◉</span><span><span class="kpi-label">Shot</span> <span{{ i.shot_note|langattrs }}>{{ i.shot_note }}</span></span></p>{% endif %}
+          </li>
+          {% endfor %}
+        </ol>
+        {% if x.checklist %}
+        <div class="up-check">
+          <p class="kpi-label">Before you post · once for this occasion</p>
+          <ul>{% for c in x.checklist %}<li{{ c|langattrs }}>{{ c }}</li>{% endfor %}</ul>
+        </div>
+        {% endif %}
+      </details>
+      {% else %}
+      <p class="up-lead">Ideas are written at the next daily check.</p>
+      {% endif %}
+      {% if x.source_text %}<p class="copy-line"><span class="kpi-label">Source</span> <code class="copy-text" id="src-{{ x.slug }}">{{ x.source_text }}</code>{% if x.checked_on %} <span>checked <time class="mono" datetime="{{ x.checked_on }}">{{ x.checked_on }}</time></span>{% endif %} <button type="button" class="btn btn-ghost btn-sm" data-copy="src-{{ x.slug }}" data-write-only aria-label="Copy the source address for {{ x.name_en }}">Copy</button></p>{% endif %}
+    </article>
+  </li>
+  {% endif %}
+  {% endfor %}
+</ul>
+{% else %}
+{% if compact %}
+{{ empty("Nothing in the next 14 days", "No occasion starts in the next two weeks. The Calendar shows what comes after.", "◷") }}
+{% else %}
+<section class="card">{{ empty("Nothing in the next 14 days", "No occasion starts in the next two weeks. The months below show what comes after.", "◷") }}</section>
+{% endif %}
+{% endif %}
+{% endmacro %}
