@@ -455,11 +455,12 @@ def match_text(text: str, occasions: Iterable[dict]) -> list[dict]:
 
 
 def _contains(text: str, key: str) -> bool:
-    """Arabic: substring (prefixes like و/ب/ل join the word). Latin: whole words only
-    («leap of faith» must not tag LEAP, «eid» not inside other words)."""
+    """Arabic: prefixes like و/ب/ل may join the start, but the match must END at a word boundary
+    («يوم العلم» must not tag «اليوم العلمي»). Latin: whole words only («leap of faith» must not tag
+    LEAP, «eid» not inside other words)."""
     if re.search(r"[a-z]", key):
         return re.search(rf"(?<![a-z0-9]){re.escape(key)}(?![a-z0-9])", text) is not None
-    return key in text
+    return re.search(re.escape(key) + "(?![\u0621-\u064a])", text) is not None
 
 
 def reel_text(row) -> str:

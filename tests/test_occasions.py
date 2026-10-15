@@ -169,7 +169,7 @@ def test_match_text_uses_names_and_keywords(seeded):
     assert "founding-day" in [o["slug"] for o in oc.match_text("What Founding Day teaches about careers", occs)]
     assert oc.match_text("3 أدوات ذكاء اصطناعي", occs) == []
     assert oc.match_text("take a leap of faith with your first job", occs) == []  # Latin keys match whole words only
-    assert "black-hat-mea-2026" in [o["slug"] for o in oc.match_text("what I saw at Black Hat in Riyadh", occs)]  # multi-word Latin key
+    assert "black-hat-mea-2026" in [o["slug"] for o in oc.match_text("what I saw at Black Hat MEA in Riyadh", occs)]  # multi-word Latin key (v1.2: "black hat" alone no longer tags it)
 
 
 def _qa_passed_reel(conn, topic: str) -> int:
@@ -326,3 +326,16 @@ def test_an_edit_in_the_same_second_still_counts_as_edited(cfg, conn, tmp_path, 
     assert r["updated_at"] != r["created_at"]
     assert oc.seed(conn, cfg, _seed_file(tmp_path, " v2"))["refreshed"] == 2  # beta + gamma, not alpha
     assert oc.get(conn, "alpha-day")["angle"] == "mine"
+
+
+# ------------------------------------------------------------------ v1.2 fact-check: word-boundary matching
+@pytest.mark.parametrize("text", ["اليوم العلمي في الجامعة", "مهارات الشباب اللي يحتاجها السوق", "black hat seo tricks"])
+def test_common_phrases_do_not_tag_a_day(text):
+    seed = oc.load_seed(SEED)
+    assert not [o["slug"] for o in oc.match_text(text, seed) if o["slug"] in ("flag-day", "youth-skills-day", "black-hat-mea-2026")]
+
+
+@pytest.mark.parametrize("text,slug", [("بمناسبة يوم العلم السعودي", "flag-day"), ("وباليوم الوطني نفخر", "national-day"),
+                                       ("ليوم التأسيس قصة", "founding-day"), ("Black Hat MEA in Riyadh", "black-hat-mea-2026")])
+def test_days_still_match_with_prefixes(text, slug):
+    assert slug in [o["slug"] for o in oc.match_text(text, oc.load_seed(SEED))]

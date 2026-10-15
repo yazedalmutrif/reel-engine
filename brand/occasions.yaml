@@ -38,7 +38,7 @@ occasions:
     category: national
     official: true
     angle: Saudi tech story then and now; national pride without commercial offers.
-    notes: Official holiday for the public and private sectors. Royal order A/371 of 24/6/1443H (2022-01-27) makes 22 Feb an official day every year. Secondary source (Okaz quoting the order); re-check the primary text on spa.gov.sa. Follow the national-symbols rules in the checklist.
+    notes: Official holiday for the public and private sectors. Royal order A/371 of 24/6/1443H (2022-01-27) makes 22 Feb an official day every year. Okaz confirms the order and the holiday; the number and date come from the order's text (Umm al-Qura gazette, uqn.gov.sa; okaz.com.sa/ampArticle/2095362). Follow the national-symbols rules in the checklist.
     source_url: https://www.okaz.com.sa/news/local/2097921
     checked_on: 2026-10-15
     keywords: [يوم التاسيس, founding day]
@@ -52,7 +52,7 @@ occasions:
     category: national
     official: true
     angle: Respectful national-pride reel; never put the flag on merchandise, ads or the floor.
-    notes: Official national occasion by royal order (A/303 of 9/8/1444H, 2023-03-01; number per Asharq Al-Awsat, secondary). The Ministry of Education page (primary) confirms 11 March and the royal order. NOT a public holiday (no holiday announcement found).
+    notes: Official national occasion by royal order (A/303 of 9/8/1444H, 2023-03-01, per Asharq Al-Awsat, secondary; the number is reused in 1446, so always cite it with its date). The Ministry of Education page (primary) confirms 11 March and the royal order. NOT a public holiday (no holiday announcement found).
     source_url: https://www.moe.gov.sa/en/mediacenter/MOEnews/Pages/Saudi-Flag-Day.aspx
     checked_on: 2026-10-15
     keywords: [يوم العلم, flag day]
@@ -80,7 +80,7 @@ occasions:
     category: national
     official: true
     angle: Vision 2030 tech careers and what young Saudis are building; no "National Day offer" CTA.
-    notes: Official holiday (one day) for the public, private and non-profit sectors. Secondary source (holiday list); the primary MHRSD notice was not retrieved. Private sector - not compensated if it falls inside an Eid holiday.
+    notes: Official holiday (one day) for the public, private and non-profit sectors. Secondary source (holiday list); the primary MHRSD notice was not retrieved. Private sector - not compensated if it falls inside an Eid holiday (Implementing Regulations art. 24, per secondary sources; check on hrsd.gov.sa).
     source_url: https://calendarific.com/holidays/2026/sa
     checked_on: 2026-10-15
     keywords: [اليوم الوطني, national day, اليوم الوطني السعودي]
@@ -367,7 +367,7 @@ occasions:
     notes: UN observance (UN list). HRSD marks it every year (2023 and 2024 statements via Al-Watan, secondary).
     source_url: https://www.un.org/en/observances/list-days-weeks
     checked_on: 2026-10-15
-    keywords: [مهارات الشباب, youth skills]
+    keywords: [youth skills day]
 
   - slug: youth-day
     name_ar: اليوم الدولي للشباب
@@ -522,7 +522,7 @@ occasions:
     category: tech
     official: false
     angle: AI and jobs headlines from FII explained simply; which jobs follow the investment.
-    notes: 26-29 Oct 2026, Riyadh (reported venue King Abdulaziz International Conference Center), FII Institute. Secondary sources (Fortune press release 2026-07-14, Sharikat Mubasher); the official site was unreachable.
+    notes: 26-29 Oct 2026, Riyadh, FII Institute (venue not named in the cited release). Secondary sources (Fortune press release 2026-07-14, Sharikat Mubasher); the official site was unreachable.
     source_url: https://fortune.com/press-releases/fii-10th-anniversary-riyadh-2026-2026-07-14/
     checked_on: 2026-10-15
     keywords: [fii, مستقبل الاستثمار]
@@ -557,7 +557,7 @@ occasions:
     notes: 1-3 Dec 2026, Riyadh Exhibition and Convention Center, Malham. The official site's text (search snippet; the page returned 403 on 2026-10-15) and a third-party directory agree.
     source_url: https://blackhatmea.com/faq
     checked_on: 2026-10-15
-    keywords: [black hat, بلاك هات]
+    keywords: [black hat mea, بلاك هات الشرق الاوسط]
 
   - slug: csedweek-2026
     name_ar: أسبوع تعليم علوم الحاسب وساعة البرمجة 2026
