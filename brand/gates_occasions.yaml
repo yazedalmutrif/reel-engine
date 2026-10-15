@@ -94,6 +94,10 @@ rules:
     window: 12
     severity: hold
     reason: occasion giveaway or prize draw (may need a licence; also an engagement-bait risk)
+  - id: pride_content
+    match: '(شهر الفخر|فخر المثليين|مجتمع الميم|المثليه|المثليين|\bpride month\b|\blgbtq?i?a?\+?)'
+    severity: hold
+    reason: "Pride/LGBT content: legal risk in KSA (Anti-Cybercrime Law M/17 art. 6(1); Audiovisual Media Law art. 5). Added 2026-10-15 (legal-compliance)"
 
 # Shown in the filming brief whenever an occasion is coming up (things text matching can't catch).
 filming_checklist:
@@ -107,3 +111,61 @@ filming_checklist:
   - Ramadan and Eid etiquette: modest dress, no showing off wealth, respectful timing.
   - Teachers' Day / Boss's Day: no real teacher or manager named or shown without their OK; no internal work screens.
   - Check which day it is before filming (Founding Day 22 Feb, National Day 23 Sep) and don't mix the two identities.
+
+# v1.2 (2026-10-15): the short legal checklist printed once in each occasion reminder (and on the dashboard),
+# by category. Lines from the tech lead's legal ruling. Optional per-slug extras go in `occasion_checklist:
+# {slug: [lines]}`. A brand pack can only ADD lines to either map.
+category_checklist:
+  national:
+    - The flag never touches the floor, ground, water, a table or anything lower; never draped on a chair or used to hold or tie anything.
+    - No flag, Shahada, emblem or leader image in any frame that has a price, product, service, CTA or another brand.
+    - National identity logos only from the official GEA / Founding Day guide, unchanged, with no CTA in the same reel.
+    - Check which day it is before filming (Founding Day 22 Feb, National Day 23 Sep) and don't mix the two identities.
+  religious:
+    - "Religious occasions: no Quran recitation over or next to music, none in a comic or promotional reel; no jokes about worship, fasting, prayer or the Prophet; nothing sectarian, tribal or mocking other countries."
+    - "Ramadan and Eid etiquette: modest dress, no showing off wealth, respectful timing."
+    - Re-check the date after the moon-sighting announcement.
+  international:
+    - Frame the day around tech and careers, not the celebration itself.
+    - Name only public figures, verified, with full titles.
+    - Show no private person without their OK.
+  tech:
+    - Link the official event page in the caption; don't use the event's logo.
+    - No internal work screens, IPs or access numbers.
+    - Never present a rumour as a launch; source every claim.
+  career:
+    - No real teacher, manager or colleague named or shown without their OK; no internal work screens.
+    - No salary or guarantee claims (the gates.yaml rules apply).
+    - Quote laws only with a checked article number.
+occasion_checklist:      # per-day extras (legal-compliance ruling 2026-10-15)
+  mothers-day-arab:
+    - Frame it as thanks to parents; avoid the wording «عيد الأم».
+    - Show family members only with their OK.
+  hijri-new-year:
+    - Planning angle only; no greeting or celebration wording.
+  ramadan-last-ten-nights:
+    - No filming in mosques or of people praying.
+  hajj-season:
+    - Never film or post from the holy sites or of pilgrims; no Hajj-without-a-permit wording.
+    - No product or service tie-in.
+  arafah-day:
+    - "Quiet day: no work CTA; post the Eid greeting plan only."
+  womens-day:
+    - Name only public women in tech, verified, with full titles.
+    - Show or name no private woman without her written OK.
+  women-girls-science-day:
+    - Name only public women in tech, verified, with full titles.
+  disabilities-day:
+    - Say «الأشخاص ذوو الإعاقة»; no pity or "suffers from" wording.
+    - Film no person with a disability without their written OK; add on-screen captions.
+  mental-health-day:
+    - "General tips only: no diagnosis, treatment or medical claims; point to a professional."
+    - Check any helpline number on an official page before using it.
+  nurses-day:
+    - No patients, records or screens; no filming inside a health facility without written permission.
+  world-health-day:
+    - No medical claims; no filming inside a health facility without written permission.
+  saudi-green-initiative-day:
+    - Use only the official SGI identity, unchanged; no CTA.
+  safety-health-work-day:
+    - Quote the Labor Law only with an article checked on hrsd.gov.sa or laws.boe.gov.sa.
